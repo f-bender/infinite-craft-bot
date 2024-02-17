@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "infinite-craft-bot"
+version = "0.1.0"
+description = ""
+authors = ["Florian Bender <benderflorian70@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+requests = "^2.31.0"
+rich = "^13.7.0"
+fasteners = "^0.19"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
