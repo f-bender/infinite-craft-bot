@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import random
+import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -10,9 +11,15 @@ from typing import Optional
 import requests
 from rich import print
 
+from lock import call_if_free
+
 HERE = Path(__file__).parent.absolute()
+
 ELEMENTS_JSON = HERE / "elements.json"
 RECIPES_JSON = HERE / "recipes.json"
+LOCK_FILE = HERE / f"{__name__}.lock"
+
+ELEMENT_SEPARATOR = ","  # character to separate elements to combine with in interactive mode
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +45,10 @@ delay_s: float = 4
 def main() -> None:
     global delay_s
 
+    interactive = "-i" in sys.argv[1:]
+    if interactive:
+        print(f"[yellow]Starting in interactive mode! Enter your ingredients, separated by '{ELEMENT_SEPARATOR}'")
+
     elements = {element["text"] for element in load_elements(ELEMENTS_JSON)["elements"]}
     # keep track of elements in a list separately, to support random.choice()
     # then, nothing in the loop is bottlenecking to O(n)
@@ -46,15 +57,44 @@ def main() -> None:
     recipes = {frozenset([recipe["first"], recipe["second"]]) for recipe in load_elements(RECIPES_JSON)["recipes"]}
 
     while True:
-        first, second = random.choice(elements_list), random.choice(elements_list)
-        # first, second = input().strip().split("+")  # manual mode
+        if interactive:
+            user_input = input().strip()
+            if user_input.count(ELEMENT_SEPARATOR) != 1:
+                print(f"You must specify exactly 2 elements separated by '{ELEMENT_SEPARATOR}'!")
+                continue
+
+            first, second = (x.strip() for x in user_input.split(ELEMENT_SEPARATOR))
+
+            # usually, the element names adhere to .title() format, so try that out in case the exact name is not in the
+            # known elements
+            if first not in elements:
+                if first.title() in elements:
+                    first = first.title()
+                else:
+                    print(f"'{first}' is not a known element!")
+                    continue
+
+            if second not in elements:
+                if second.title() in elements:
+                    second = second.title()
+                else:
+                    print(f"'{second}' is not a known element!")
+                    continue
+        else:
+            first, second = random.choice(elements_list), random.choice(elements_list)
+
         recipe = frozenset([first, second])
+
         # "Nothing" is not actually an element you can use for crafting
         # It shouldn't be part of the elements anyways, but this is an extra safety barrier
         if recipe in recipes or "Nothing" in recipe:
+            if interactive:
+                print("[grey50]Already known recipe!")
             continue
 
-        time.sleep(delay_s)
+        if not interactive:
+            time.sleep(delay_s)
+
         result = craft_items(first, second)
         if not result:
             continue
@@ -64,6 +104,8 @@ def main() -> None:
         # "Nothing" is not actually an element, but the indication of a recipe being invalid.
         # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
         if result["result"] in elements or result["result"] == "Nothing":
+            if interactive:
+                print(f"[grey50]Already known result: {result['result']}")
             continue
 
         elements.add(result["result"])
@@ -136,4 +178,4 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
 
 
 if __name__ == "__main__":
-    main()
+    call_if_free(main, LOCK_FILE)

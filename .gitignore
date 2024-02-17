@@ -1,2 +1,4 @@
 bats/
 logs/
+__main__.lock
+__pycache__/
