@@ -24,17 +24,28 @@ ELEMENT_SEPARATOR = ","  # character to separate elements to combine with in int
 logger = logging.getLogger(__name__)
 
 # Set the logging level to the lowest priority (DEBUG) to capture all messages
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # Create a formatter with a timestamp
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
 
-# Create a file handler that rotates every midnight
+# Create a file handler for general logs that rotates every midnight
 file_handler = TimedRotatingFileHandler(HERE / "logs" / "problems.log", when="H", interval=2, backupCount=1, delay=True)
+file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 
 # Add the file handler to the logger
 logger.addHandler(file_handler)
+
+# Create a separate file handler for debug logs
+debug_file_handler = TimedRotatingFileHandler(
+    HERE / "logs" / "debug.log", when="M", interval=5, backupCount=1, delay=True
+)
+debug_file_handler.setLevel(logging.DEBUG)  # Set the handler level to DEBUG
+debug_file_handler.setFormatter(formatter)
+
+# Add the debug file handler to the logger
+logger.addHandler(debug_file_handler)
 
 MIN_DELAY_S = 1
 MAX_DELAY_S = 64
@@ -42,6 +53,7 @@ MAX_DELAY_S = 64
 delay_s: float = 4
 
 
+# TODO: refactor into smaller functions
 def main() -> None:
     global delay_s
 
@@ -56,6 +68,7 @@ def main() -> None:
 
     recipes = {frozenset([recipe["first"], recipe["second"]]) for recipe in load_elements(RECIPES_JSON)["recipes"]}
 
+    t: Optional[float] = None
     while True:
         if interactive:
             user_input = input().strip()
@@ -93,9 +106,13 @@ def main() -> None:
             continue
 
         if not interactive:
+            if t:
+                logger.debug(f"Iteration took {(time.perf_counter() - t) * 1_000:.3g}ms")
+            logger.debug(f"Sleeping for {delay_s:.3g}s")
             time.sleep(delay_s)
 
         result = craft_items(first, second)
+        t = time.perf_counter()
         if not result:
             continue
 
@@ -182,9 +199,8 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
             return response.json()
         else:
             logger.warning(f"Crafting failed: {response.status_code} {response.reason}")
-            if response.status_code == 429 and response.reason == "Too Many Requests":
-                delay_s = min(MAX_DELAY_S, delay_s * 2)
-                logger.info(f"Backing off - delay = {delay_s}s")
+            delay_s = min(MAX_DELAY_S, delay_s * 2)
+            logger.info(f"Backing off - delay = {delay_s}s")
     except Exception as e:
         logger.warning(f"Crafting failed: {e}")
 
