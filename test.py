@@ -55,6 +55,14 @@ def check_ingredients_have_been_made():
                 print(second)
         produced_elements.add(res)
 
+def check_made_elements_are_saved():
+    produced_elements = set(recipes.values()) | {"Water", "Wind", "Fire", "Earth"}
+    for element in produced_elements:
+        if element == "Nothing":
+            continue
+        if element not in elements:
+            print(element)
+
 # no outputs indicates everything is fine
 print("made using nothing:")
 check_if_made_using_nothing()
@@ -64,3 +72,6 @@ check_ingredients_have_been_made()
 print()
 print("elements have been made:")
 check_elements_have_been_made()
+print()
+print("made elements are saved:")
+check_made_elements_are_saved()
