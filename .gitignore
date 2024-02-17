@@ -1,4 +1,5 @@
 bats/
 logs/
-__main__.lock
+*.lock
+!poetry.lock
 __pycache__/

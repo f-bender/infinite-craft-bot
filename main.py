@@ -17,7 +17,7 @@ HERE = Path(__file__).parent.absolute()
 
 ELEMENTS_JSON = HERE / "elements.json"
 RECIPES_JSON = HERE / "recipes.json"
-LOCK_FILE = HERE / f"{__name__}.lock"
+LOCK_FILE = HERE / f"{Path(__file__).stem}.lock"
 
 ELEMENT_SEPARATOR = ","  # character to separate elements to combine with in interactive mode
 
