@@ -157,7 +157,21 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
         t0 = time.perf_counter()
         response = requests.get(
             f"https://neal.fun/api/infinite-craft/pair?first={item1}&second={item2}",
-            headers={"Referer": "https://neal.fun/infinite-craft/"},
+            headers={
+                # directly copied from a request made when using Infinite Craft in the browser
+                # (F12 -> Network tab -> click on "pair?..." request -> Headers tab -> Request Headers)
+                "Accept": "*/*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "en-US,en;q=0.9,de-DE;q=0.8,de;q=0.7",
+                "Referer": "https://neal.fun/infinite-craft/",
+                "Sec-Ch-Ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            },
             timeout=10,
         )
         t = time.perf_counter() - t0
