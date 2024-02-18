@@ -1,3 +1,4 @@
+import bisect
 import json
 import logging
 import os
@@ -8,15 +9,20 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import requests
 from rich import print
 
 from lock import call_if_free
 
+# increase this number to increasingly select lower-depth elements for combination rather than higher-depth ones
+LOWER_DEPTH_PRIORITIZATION_FACTOR = 10
+
 HERE = Path(__file__).parent.absolute()
 
 ELEMENTS_JSON = HERE / "elements.json"
 RECIPES_JSON = HERE / "recipes.json"
+ELEMENTS_PATHS_JSON = HERE / "elements_paths.json"
 LOCK_FILE = HERE / f"{Path(__file__).stem}.lock"
 
 ELEMENT_SEPARATOR = ","  # character to separate elements to combine with in interactive mode
@@ -61,10 +67,14 @@ def main() -> None:
     if interactive:
         print(f"[yellow]Starting in interactive mode! Enter your ingredients, separated by '{ELEMENT_SEPARATOR}'")
 
-    elements = {element["text"] for element in load_elements(ELEMENTS_JSON)["elements"]}
-    # keep track of elements in a list separately, to support random.choice()
-    # then, nothing in the loop is bottlenecking to O(n)
-    elements_list = list(elements)
+    _element_paths = json.load(ELEMENTS_PATHS_JSON.open("r", encoding="UTF-8"))
+    elements_to_path: dict[str, set[str]] = {
+        element["text"]: set(_element_paths[element["text"]]["path"])
+        for element in load_elements(ELEMENTS_JSON)["elements"]
+    }
+    # list of tuples (element_name, element_path), sorted by path length
+    sorted_elements = list(elements_to_path)
+    sorted_elements.sort(key=lambda el: len(elements_to_path[el]))
 
     recipes = {frozenset([recipe["first"], recipe["second"]]) for recipe in load_elements(RECIPES_JSON)["recipes"]}
 
@@ -80,21 +90,21 @@ def main() -> None:
 
             # usually, the element names adhere to .title() format, so try that out in case the exact name is not in the
             # known elements
-            if first not in elements:
-                if first.title() in elements:
+            if first not in elements_to_path:
+                if first.title() in elements_to_path:
                     first = first.title()
                 else:
                     print(f"'{first}' is not a known element!")
                     continue
 
-            if second not in elements:
-                if second.title() in elements:
+            if second not in elements_to_path:
+                if second.title() in elements_to_path:
                     second = second.title()
                 else:
                     print(f"'{second}' is not a known element!")
                     continue
         else:
-            first, second = random.choice(elements_list), random.choice(elements_list)
+            first, second = sample_elements(sorted_elements, elements_to_path)
 
         recipe = frozenset([first, second])
 
@@ -108,7 +118,6 @@ def main() -> None:
         if not interactive:
             if t:
                 logger.debug(f"Iteration took {(time.perf_counter() - t) * 1_000:.3g}ms")
-            logger.debug(f"Sleeping for {delay_s:.3g}s")
             time.sleep(delay_s)
 
         result = craft_items(first, second)
@@ -118,20 +127,76 @@ def main() -> None:
 
         recipes.add(recipe)
         add_element(RECIPES_JSON, {"first": first, "second": second, "result": result["result"]})
+
+        new_element_name = result["result"]
         # "Nothing" is not actually an element, but the indication of a recipe being invalid.
         # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
-        if result["result"] in elements or result["result"] == "Nothing":
+        if new_element_name == "Nothing":
             if interactive:
-                print(f"[grey50]Already known result: {result['result']}")
+                print("[grey50]Nothing")
             continue
 
-        elements.add(result["result"])
-        elements_list.append(result["result"])
+        new_element_path = elements_to_path[first] | elements_to_path[second] | {new_element_name}
+
+        if new_element_name in elements_to_path:
+            if interactive:
+                print(f"[grey50]Already known result: {new_element_name}")
+
+            old_length = len(elements_to_path[new_element_name])
+            new_length = len(new_element_path)
+            if new_length < old_length:
+                print(f"[yellow]Found shorter path to {new_element_name} ({old_length} -> {new_length})!")
+                elements_to_path[new_element_name] = new_element_path
+
+            continue
+
+        # actually new element
+
+        elements_to_path[new_element_name] = new_element_path
+        # add at correct index (keeping it sorted) using bisection
+        bisect.insort(sorted_elements, new_element_name, key=lambda el_name: len(elements_to_path[el_name]))
         add_element(ELEMENTS_JSON, {"text": result["result"], "emoji": result["emoji"], "discovered": result["isNew"]})
 
         color = "[green]" if result["isNew"] else ""
         new_element_str = f"{result['emoji']:>5} {result['result']}"
         print(f"{color}{new_element_str:<50} ({first} + {second})")
+
+
+def print_finding(new_element: dict[str, str], depth: int, previous_depth: Optional[int] = None) -> None:
+    """TODO: unified format of printing new elements (green if new discovery else white) and shorter paths (yellow)."""
+
+
+def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[str]]) -> tuple[str, str]:
+    num_elements = len(sorted_elements)
+
+    mean = 0
+    std_deviation = len(sorted_elements) / LOWER_DEPTH_PRIORITIZATION_FACTOR
+
+    while True:
+        i = j = num_elements
+        while not (i < num_elements and j < num_elements):
+            i, j = np.random.normal(mean, std_deviation, size=2)
+            i, j = int(abs(i)), int(abs(j))
+
+        first_name, second_name = sorted_elements[i], sorted_elements[j]
+        first_path, second_path = elements_to_path[first_name], elements_to_path[second_name]
+
+        path_lengths = len(first_path), len(second_path)
+        intersection_length = len(first_path & second_path)
+        intersec_over_min = 1 if 0 in path_lengths else intersection_length / min(path_lengths)
+
+        zero_intersec_keep_probability = 1 / max(1, sum(path_lengths))
+
+        keep_probability = zero_intersec_keep_probability + intersec_over_min * (1 - zero_intersec_keep_probability)
+        logger.debug(
+            f"{num_elements} -> {(i, j)}, depths {path_lengths}, new depth "
+            f"{sum(path_lengths) + 1 - intersection_length} ({(first_name, second_name)})"
+        )
+        if random.random() < keep_probability:
+            logger.debug("Accepted!")
+            return first_name, second_name
+        else:
+            logger.debug("Discarded!")
 
 
 def load_elements(file: Path) -> dict[str, list[dict[str, str]]]:
@@ -195,12 +260,14 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
         (logger.debug if t < 2 else logger.info)(f"Request took {t:.3g}s")
 
         if response.ok:
-            delay_s = max(MIN_DELAY_S, delay_s / 2)
+            if delay_s > MIN_DELAY_S:
+                delay_s = max(MIN_DELAY_S, delay_s / 2)
+                logger.debug(f"Reducing delay to {delay_s:.3g}s")
             return response.json()
         else:
             logger.warning(f"Crafting failed: {response.status_code} {response.reason}")
             delay_s = min(MAX_DELAY_S, delay_s * 2)
-            logger.info(f"Backing off - delay = {delay_s}s")
+            logger.info(f"Backing off - delay = {delay_s:.3g}s")
     except Exception as e:
         logger.warning(f"Crafting failed: {e}")
 
