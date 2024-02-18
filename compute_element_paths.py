@@ -1,4 +1,5 @@
 from collections import Counter
+import pandas as pd
 import matplotlib.pyplot as plt
 from itertools import count
 import json
@@ -8,6 +9,15 @@ from rich import print
 
 HERE = Path(__file__).parent.absolute()
 
+# TODO: script which tells you the steps to get to a given element, based on the outputs of this script
+
+#! This script most likely contains a bug: at commit 'e7a9ce4', Jesus Shark was determined to be the deepest element
+#! at depth 400, and *later*, at commit 'f5c7c69', after more recipes where explored, Jesus Shark was determined to be
+#! the deepest element at depth 404; i.e. new recipes increased the depth of Jesus Shark,
+#! which should never be possible!
+#* The good news: overall, the stats seem reasonable, in each iteration the average depths goes down.
+#* It just looks like iterating like this, until no more changes occur, doesn't guarantee the optimal depth to be found.
+#* (Which I didn't expect)
 
 def main() -> None:
     recipes = [
@@ -42,8 +52,12 @@ def main() -> None:
                 elements[result] = (new_ancestors, new_path)
                 modified = True
 
+        print("Stats:")
+        print(pd.DataFrame([len(path) for _, path in elements.values()]).describe())
+        print()
         if not modified:
             print("Done!")
+            print()
             break
 
     with (HERE / "elements_paths.json").open("w", encoding="UTF-8") as f:
