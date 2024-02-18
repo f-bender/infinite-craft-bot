@@ -18,6 +18,14 @@ from lock import call_if_free
 # increase this number to increasingly select lower-depth elements for combination rather than higher-depth ones
 LOWER_DEPTH_PRIORITIZATION_FACTOR = 25
 
+# the higher this value, the more likely a combination is discarded if their paths don't overlap well
+# 0 => no combinations are discarded due to overlap/synergy issues
+# 0.5 => a single non-overlap leads to discarding with 29.29% probability, 2 non-overlaps -> 42.27%, ...
+# 1 => a single non-overlap leads to discarding with 50% probability, 2 non-overlaps -> 66.67%, ...
+# 3 => a single non-overlap leads to discarding with 93.75% probability
+NON_SYNERGY_PENALIZATION_COEFFICIENT = 0.5
+assert NON_SYNERGY_PENALIZATION_COEFFICIENT >= 0
+
 HERE = Path(__file__).parent.absolute()
 
 ELEMENTS_JSON = HERE / "elements.json"
@@ -53,10 +61,18 @@ debug_file_handler.setFormatter(formatter)
 # Add the debug file handler to the logger
 logger.addHandler(debug_file_handler)
 
-MIN_DELAY_S = 1
+# Create a console handler for warnings and higher
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.WARNING)  # Set the handler level to WARNING
+console_handler.setFormatter(formatter)
+
+# Add the console handler to the logger
+logger.addHandler(console_handler)
+
+MIN_DELAY_S = 0.5
 MAX_DELAY_S = 64
 
-delay_s: float = 4
+delay_s: float = MIN_DELAY_S
 
 
 # TODO: refactor into smaller functions
@@ -113,11 +129,14 @@ def main() -> NoReturn:
         if recipe in recipes or "Nothing" in recipe:
             if interactive:
                 print("[grey50]Already known recipe!")
+            logger.debug("Rejecting known recipe")
             continue
 
         if not interactive:
             if t:
-                logger.debug(f"Iteration took {(time.perf_counter() - t) * 1_000:.3g}ms")
+                logger.debug(f"{(time.perf_counter() - t) * 1_000:.3g}ms (Iteration)")
+            # TODO: sleep based on how long ago the last request was made (such that there is a fixed time in between requests)
+            # ? or maybe rather a fixed time in between a response being received and a new reqeust being made?
             time.sleep(delay_s)
 
         result = craft_items(first, second)
@@ -195,7 +214,7 @@ def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[
         # the highest overlap that would be possible given the path lenths, minus the actual overlap (intersection)
         # -> This many nodes of the path could have overlapped but didn't
         non_overlapping_path_length = min(path_lengths) - intersection_length
-        keep_probability = (1 / (1 + non_overlapping_path_length))**0.5
+        keep_probability = (1 / (1 + non_overlapping_path_length)) ** NON_SYNERGY_PENALIZATION_COEFFICIENT
 
         logger.debug(
             f"{num_elements} -> {(i, j)}, depths {path_lengths} -> "
@@ -203,10 +222,7 @@ def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[
             f"prob {keep_probability:.3g} ({(first_name, second_name)})"
         )
         if random.random() < keep_probability:
-            logger.debug("Accepted!")
             return first_name, second_name
-        else:
-            logger.debug("Discarded!")
 
 
 def load_elements(file: Path) -> dict[str, list[dict[str, str]]]:
@@ -268,7 +284,7 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
             timeout=10,
         )
         t = time.perf_counter() - t0
-        (logger.debug if t < 2 else logger.info)(f"Request took {t:.3g}s")
+        (logger.debug if t < 2 else logger.info)(f"{t:.3g}s (Request)")
 
         if response.ok:
             if delay_s > MIN_DELAY_S:
