@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from rich import print
 
-HERE = Path(__file__).parent.absolute()
+PROJECT_ROOT = Path(__file__).parents[1].absolute()
 
 # TODO: script which tells you the steps to get to a given element, based on the outputs of this script
 
@@ -24,7 +24,7 @@ def main() -> None:
         # NOTE: don't need to save them as a dict with frozenset keys, because I never look up a recipe
         # (I just iterate over them)
         (recipe["first"], recipe["second"], recipe["result"])
-        for recipe in json.load((HERE / "recipes.json").open("r", encoding="UTF-8"))["recipes"]
+        for recipe in json.load((PROJECT_ROOT / "data" / "recipes.json").open("r", encoding="UTF-8"))["recipes"]
     ]
 
     elements: dict[str, tuple[Optional[tuple[str, str]], set[str]]] = {
@@ -60,7 +60,7 @@ def main() -> None:
             print()
             break
 
-    with (HERE / "elements_paths.json").open("w", encoding="UTF-8") as f:
+    with (PROJECT_ROOT / "data" / "elements_paths.json").open("w", encoding="UTF-8") as f:
         json.dump(
             {element: {"anc": ancestors, "path": list(path)} for element, (ancestors, path) in elements.items()},
             f,
@@ -83,7 +83,7 @@ def compute_stats(elements: dict[str, tuple[Optional[tuple[str, str]], set[str]]
     plt.bar(*zip(*depth_counts.items()))
     plt.xlabel("Depth of Element")
     plt.ylabel("Number of Elements")
-    plt.savefig("stats.svg")
+    plt.savefig(PROJECT_ROOT / "data" / "stats.svg")
 
 
 if __name__ == "__main__":

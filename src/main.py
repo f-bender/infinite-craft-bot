@@ -26,12 +26,12 @@ LOWER_DEPTH_PRIORITIZATION_FACTOR = 25
 NON_SYNERGY_PENALIZATION_COEFFICIENT = 0.5
 assert NON_SYNERGY_PENALIZATION_COEFFICIENT >= 0
 
-HERE = Path(__file__).parent.absolute()
+PROJECT_ROOT = Path(__file__).parents[1].absolute()
 
-ELEMENTS_JSON = HERE / "elements.json"
-RECIPES_JSON = HERE / "recipes.json"
-ELEMENTS_PATHS_JSON = HERE / "elements_paths.json"
-LOCK_FILE = HERE / f"{Path(__file__).stem}.lock"
+ELEMENTS_JSON = PROJECT_ROOT / "data"/ "elements.json"
+RECIPES_JSON = PROJECT_ROOT / "data" / "recipes.json"
+ELEMENTS_PATHS_JSON = PROJECT_ROOT / "data" / "elements_paths.json"
+LOCK_FILE = PROJECT_ROOT / f"{Path(__file__).stem}.lock"
 
 ELEMENT_SEPARATOR = ","  # character to separate elements to combine with in interactive mode
 
@@ -44,7 +44,7 @@ logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
 
 # Create a file handler for general logs that rotates every midnight
-file_handler = TimedRotatingFileHandler(HERE / "logs" / "problems.log", when="H", interval=2, backupCount=1, delay=True)
+file_handler = TimedRotatingFileHandler(PROJECT_ROOT / "logs" / "problems.log", when="H", interval=2, backupCount=1, delay=True)
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 
@@ -53,7 +53,7 @@ logger.addHandler(file_handler)
 
 # Create a separate file handler for debug logs
 debug_file_handler = TimedRotatingFileHandler(
-    HERE / "logs" / "debug.log", when="M", interval=5, backupCount=1, delay=True
+    PROJECT_ROOT / "logs" / "debug.log", when="M", interval=5, backupCount=1, delay=True
 )
 debug_file_handler.setLevel(logging.DEBUG)  # Set the handler level to DEBUG
 debug_file_handler.setFormatter(formatter)

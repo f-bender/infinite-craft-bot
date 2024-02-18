@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 from pprint import pformat
 
-HERE = Path(__file__).parent.absolute()
-ELEMENTS_JSON = HERE / "elements.json"
-RECIPES_JSON = HERE / "recipes.json"
+PROJECT_ROOT = Path(__file__).parents[1].absolute()
+ELEMENTS_JSON = PROJECT_ROOT / "data" / "elements.json"
+RECIPES_JSON = PROJECT_ROOT / "data" / "recipes.json"
 
 recipes = {
     frozenset([recipe["first"], recipe["second"]]): recipe["result"]
