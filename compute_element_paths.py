@@ -81,7 +81,9 @@ def compute_stats(elements: dict[str, tuple[Optional[tuple[str, str]], set[str]]
     print(f"Most elements at depth {most_common_depth} ({num_elements} elements)")
 
     plt.bar(*zip(*depth_counts.items()))
-    plt.savefig("stats.png")
+    plt.xlabel("Number of Elements")
+    plt.ylabel("Depth of Element")
+    plt.savefig("stats.svg")
 
 
 if __name__ == "__main__":
