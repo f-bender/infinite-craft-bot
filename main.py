@@ -16,7 +16,7 @@ from rich import print
 from lock import call_if_free
 
 # increase this number to increasingly select lower-depth elements for combination rather than higher-depth ones
-LOWER_DEPTH_PRIORITIZATION_FACTOR = 10
+LOWER_DEPTH_PRIORITIZATION_FACTOR = 25
 
 HERE = Path(__file__).parent.absolute()
 
@@ -183,14 +183,16 @@ def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[
 
         path_lengths = len(first_path), len(second_path)
         intersection_length = len(first_path & second_path)
-        intersec_over_min = 1 if 0 in path_lengths else intersection_length / min(path_lengths)
 
-        zero_intersec_keep_probability = 1 / max(1, sum(path_lengths))
+        # the highest overlap that would be possible given the path lenths, minus the actual overlap (intersection)
+        # -> This many nodes of the path could have overlapped but didn't
+        non_overlapping_path_length = min(path_lengths) - intersection_length
+        keep_probability = (1 / (1 + non_overlapping_path_length))**0.5
 
-        keep_probability = zero_intersec_keep_probability + intersec_over_min * (1 - zero_intersec_keep_probability)
         logger.debug(
-            f"{num_elements} -> {(i, j)}, depths {path_lengths}, new depth "
-            f"{sum(path_lengths) + 1 - intersection_length} ({(first_name, second_name)})"
+            f"{num_elements} -> {(i, j)}, depths {path_lengths} -> "
+            f"{sum(path_lengths) + 1 - intersection_length}, intersect {intersection_length}, "
+            f"prob {keep_probability:.3g} ({(first_name, second_name)})"
         )
         if random.random() < keep_probability:
             logger.debug("Accepted!")
