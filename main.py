@@ -7,7 +7,7 @@ import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
-from typing import Optional
+from typing import NoReturn, Optional
 
 import numpy as np
 import requests
@@ -60,7 +60,7 @@ delay_s: float = 4
 
 
 # TODO: refactor into smaller functions
-def main() -> None:
+def main() -> NoReturn:
     global delay_s
 
     interactive = "-i" in sys.argv[1:]
@@ -286,4 +286,7 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
 
 
 if __name__ == "__main__":
-    call_if_free(main, LOCK_FILE)
+    success = call_if_free(main, LOCK_FILE)
+    if not success:
+        print("Program is already running in another instance! Exiting with exit code 1...")
+        sys.exit(1)

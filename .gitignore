@@ -1,4 +1,3 @@
-bats/
 logs/
 *.lock
 !poetry.lock
