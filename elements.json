@@ -6216,6 +6216,10 @@
         {"text": "Fulgurite", "emoji": "⚡️", "discovered": false},
         {"text": "Uluru", "emoji": "🏜️", "discovered": false},
         {"text": "Steamosaurus", "emoji": "🦖", "discovered": false},
-        {"text": "Silver Surfer", "emoji": "🏄", "discovered": false}
+        {"text": "Silver Surfer", "emoji": "🏄", "discovered": false},
+        {"text": "Rainbow Whale", "emoji": "🐳", "discovered": false},
+        {"text": "Nokia Express", "emoji": "📱", "discovered": false},
+        {"text": "Railroad", "emoji": "🚆", "discovered": false},
+        {"text": "Ice Tea Rex", "emoji": "🦖", "discovered": false}
     ]
 }
