@@ -11,7 +11,7 @@ from typing import NoReturn, Optional
 
 import numpy as np
 import requests
-from rich import print
+import rich
 
 from lock import call_if_free
 
@@ -28,7 +28,7 @@ assert NON_SYNERGY_PENALIZATION_COEFFICIENT >= 0
 
 PROJECT_ROOT = Path(__file__).parents[1].absolute()
 
-ELEMENTS_JSON = PROJECT_ROOT / "data"/ "elements.json"
+ELEMENTS_JSON = PROJECT_ROOT / "data" / "elements.json"
 RECIPES_JSON = PROJECT_ROOT / "data" / "recipes.json"
 ELEMENTS_PATHS_JSON = PROJECT_ROOT / "data" / "elements_paths.json"
 LOCK_FILE = PROJECT_ROOT / f"{Path(__file__).stem}.lock"
@@ -44,7 +44,9 @@ logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S")
 
 # Create a file handler for general logs that rotates every midnight
-file_handler = TimedRotatingFileHandler(PROJECT_ROOT / "logs" / "problems.log", when="H", interval=2, backupCount=1, delay=True)
+file_handler = TimedRotatingFileHandler(
+    PROJECT_ROOT / "logs" / "problems.log", when="H", interval=2, backupCount=1, delay=True
+)
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 
@@ -69,7 +71,7 @@ console_handler.setFormatter(formatter)
 # Add the console handler to the logger
 logger.addHandler(console_handler)
 
-MIN_DELAY_S = 0.5
+MIN_DELAY_S = 0.001
 MAX_DELAY_S = 64
 
 delay_s: float = MIN_DELAY_S
@@ -81,7 +83,7 @@ def main() -> NoReturn:
 
     interactive = "-i" in sys.argv[1:]
     if interactive:
-        print(f"[yellow]Starting in interactive mode! Enter your ingredients, separated by '{ELEMENT_SEPARATOR}'")
+        rich.print(f"[yellow]Starting in interactive mode! Enter your ingredients, separated by '{ELEMENT_SEPARATOR}'")
 
     _element_paths = json.load(ELEMENTS_PATHS_JSON.open("r", encoding="UTF-8"))
     elements_to_path: dict[str, set[str]] = {
@@ -99,7 +101,7 @@ def main() -> NoReturn:
         if interactive:
             user_input = input().strip()
             if user_input.count(ELEMENT_SEPARATOR) != 1:
-                print(f"You must specify exactly 2 elements separated by '{ELEMENT_SEPARATOR}'!")
+                rich.print(f"You must specify exactly 2 elements separated by '{ELEMENT_SEPARATOR}'!")
                 continue
 
             first, second = (x.strip() for x in user_input.split(ELEMENT_SEPARATOR))
@@ -110,14 +112,14 @@ def main() -> NoReturn:
                 if first.title() in elements_to_path:
                     first = first.title()
                 else:
-                    print(f"'{first}' is not a known element!")
+                    rich.print(f"'{first}' is not a known element!")
                     continue
 
             if second not in elements_to_path:
                 if second.title() in elements_to_path:
                     second = second.title()
                 else:
-                    print(f"'{second}' is not a known element!")
+                    rich.print(f"'{second}' is not a known element!")
                     continue
         else:
             first, second = sample_elements(sorted_elements, elements_to_path)
@@ -128,7 +130,7 @@ def main() -> NoReturn:
         # It shouldn't be part of the elements anyways, but this is an extra safety barrier
         if recipe in recipes or "Nothing" in recipe:
             if interactive:
-                print("[grey50]Already known recipe!")
+                rich.print("[grey50]Already known recipe!")
             logger.debug("Rejecting known recipe")
             continue
 
@@ -138,11 +140,16 @@ def main() -> NoReturn:
             # TODO: sleep based on how long ago the last request was made (such that there is a fixed time in between requests)
             # ? or maybe rather a fixed time in between a response being received and a new reqeust being made?
             time.sleep(delay_s)
+            #! carefully monitor... but it seems like I'm not getting rate limited anymore, even without this sleep
+            # TODO in case this reliably works, think about trying multi-threading/async to increase the rate of requests
 
         result = craft_items(first, second)
         t = time.perf_counter()
         if not result:
             continue
+
+        print(".", end="")
+        sys.stdout.flush()  # required to correctly display this in Windows Terminal
 
         recipes.add(recipe)
         add_element(RECIPES_JSON, {"first": first, "second": second, "result": result["result"]})
@@ -152,14 +159,14 @@ def main() -> NoReturn:
         # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
         if new_element_name == "Nothing":
             if interactive:
-                print("[grey50]Nothing")
+                rich.print("[grey50]Nothing")
             continue
 
         new_element_path = elements_to_path[first] | elements_to_path[second] | {new_element_name}
 
         if new_element_name in elements_to_path:
             if interactive:
-                print(f"[grey50]Already known result: {new_element_name}")
+                rich.print(f"[grey50]Already known result: {new_element_name}")
 
             old_length = len(elements_to_path[new_element_name])
             new_length = len(new_element_path)
@@ -190,7 +197,8 @@ def print_finding(
     depth_str = f"({previous_depth} -> {depth})" if previous_depth is not None else f"({depth})"
     ingredients_str = f"({first} + {second})"
 
-    print(f"{color_str}{new_element_str:<50} {depth_str:>12} {ingredients_str}")
+    print("\r", end="")
+    rich.print(f"{color_str}{new_element_str:<50} {depth_str:>12} {ingredients_str}")
 
 
 def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[str]]) -> tuple[str, str]:
@@ -304,5 +312,5 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
 if __name__ == "__main__":
     success = call_if_free(main, LOCK_FILE)
     if not success:
-        print("Program is already running in another instance! Exiting with exit code 1...")
+        rich.print("Program is already running in another instance! Exiting with exit code 1...")
         sys.exit(1)
