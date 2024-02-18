@@ -145,7 +145,9 @@ def main() -> None:
             old_length = len(elements_to_path[new_element_name])
             new_length = len(new_element_path)
             if new_length < old_length:
-                print(f"[yellow]Found shorter path to {new_element_name} ({old_length} -> {new_length})!")
+                print_finding(
+                    new_element=result, depth=new_length, previous_depth=old_length, first=first, second=second
+                )
                 elements_to_path[new_element_name] = new_element_path
 
             continue
@@ -157,13 +159,19 @@ def main() -> None:
         bisect.insort(sorted_elements, new_element_name, key=lambda el_name: len(elements_to_path[el_name]))
         add_element(ELEMENTS_JSON, {"text": result["result"], "emoji": result["emoji"], "discovered": result["isNew"]})
 
-        color = "[green]" if result["isNew"] else ""
-        new_element_str = f"{result['emoji']:>5} {result['result']}"
-        print(f"{color}{new_element_str:<50} ({first} + {second})")
+        print_finding(new_element=result, depth=len(new_element_path), first=first, second=second)
 
 
-def print_finding(new_element: dict[str, str], depth: int, previous_depth: Optional[int] = None) -> None:
-    """TODO: unified format of printing new elements (green if new discovery else white) and shorter paths (yellow)."""
+def print_finding(
+    new_element: dict[str, str], depth: int, first: str, second: str, previous_depth: Optional[int] = None
+) -> None:
+    """Unified format of printing new elements (green if new discovery else white) and shorter paths (yellow)."""
+    color_str = "[green]" if new_element["isNew"] else "[yellow]" if previous_depth is not None else ""
+    new_element_str = f"{new_element['emoji']:>5} {new_element['result']}"
+    depth_str = f"({previous_depth} -> {depth})" if previous_depth is not None else f"({depth})"
+    ingredients_str = f"({first} + {second})"
+
+    print(f"{color_str}{new_element_str:<50} {depth_str:>12} {ingredients_str}")
 
 
 def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[str]]) -> tuple[str, str]:
@@ -216,6 +224,7 @@ def load_elements(file: Path) -> dict[str, list[dict[str, str]]]:
         ]
     }
     """
+    # TODO: inline; this function adds no value
     with file.open("r", encoding="UTF-8") as f:
         return json.load(f)
 
