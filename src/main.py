@@ -175,6 +175,9 @@ def main() -> NoReturn:
                     new_element=result, depth=new_length, previous_depth=old_length, first=first, second=second
                 )
                 elements_to_path[new_element_name] = new_element_path
+                # sort again, such that the element moves to its new correct place in the list
+                # (now that its path is shorter)
+                sorted_elements.sort(key=lambda el: len(elements_to_path[el]))
 
             continue
 
