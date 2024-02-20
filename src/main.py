@@ -5,6 +5,7 @@ import os
 import random
 import sys
 import time
+from multiprocessing.pool import ThreadPool
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import NoReturn, Optional
@@ -71,10 +72,45 @@ console_handler.setFormatter(formatter)
 # Add the console handler to the logger
 logger.addHandler(console_handler)
 
-MIN_DELAY_S = 0.001
-MAX_DELAY_S = 64
+MAX_NUM_PARALLEL_CRAFTS = 5
+num_parallel_crafts: int = 1
 
-delay_s: float = MIN_DELAY_S
+#! suspected rate limit: 5 requests per second (it's definitely no higher than that! and most likely not lower!)
+#! Watch out: doing ANY manual requests while this script is working at capacity immediately leads to
+#! an exceeded rate limit and a 1 hour ban!
+#! => 2 parallel requests every 0.4 seconds!
+#! OR: 5 parallel requests every 1 second
+#! (sometime requests take up to 0.5 seconds, in that case this is slightly faster over time)
+MIN_DELAY_S = 1.0
+MAX_DELAY_S = 64.0
+
+delay_s = MIN_DELAY_S
+
+
+def update_delay(increase: bool = False) -> None:
+    global delay_s, num_parallel_crafts
+
+    if increase:
+        num_parallel_crafts = max(num_parallel_crafts - 1, 1)
+    else:
+        num_parallel_crafts = min(num_parallel_crafts + 1, MAX_NUM_PARALLEL_CRAFTS)
+
+    before = delay_s
+
+    match delay_s, increase:
+        case 0, True:
+            # never occurs if branch 3 isn't active
+            delay_s = MIN_DELAY_S
+        case _, True:
+            delay_s = min(delay_s * 2, MAX_DELAY_S)
+        #! THIS BRANCH MUST REMAIN DISABLED WHEN MULTIPLE THREADS ARE USED
+        # case x, False if x == MIN_DELAY_S:
+        #     delay_s = 0
+        case x, False if x > 0:
+            delay_s = max(delay_s / 2, MIN_DELAY_S)
+
+    if delay_s != before:
+        logger.debug(("Increasing" if increase else "Decreasing") + f" delay to {delay_s:.3g}s")
 
 
 # TODO: refactor into smaller functions
@@ -85,6 +121,7 @@ def main() -> NoReturn:
     if interactive:
         rich.print(f"[yellow]Starting in interactive mode! Enter your ingredients, separated by '{ELEMENT_SEPARATOR}'")
 
+    t0 = time.perf_counter()
     _element_paths = json.load(ELEMENTS_PATHS_JSON.open("r", encoding="UTF-8"))
     elements_to_path: dict[str, set[str]] = {
         element["text"]: set(_element_paths[element["text"]]["path"])
@@ -95,8 +132,10 @@ def main() -> NoReturn:
     sorted_elements.sort(key=lambda el: len(elements_to_path[el]))
 
     recipes = {frozenset([recipe["first"], recipe["second"]]) for recipe in load_elements(RECIPES_JSON)["recipes"]}
+    rich.print(f"Loaded elements and recipes in {time.perf_counter() - t0:.3g}s")
 
     t: Optional[float] = None
+    t_total: Optional[float] = None
     while True:
         if interactive:
             user_input = input().strip()
@@ -121,74 +160,83 @@ def main() -> NoReturn:
                 else:
                     rich.print(f"'{second}' is not a known element!")
                     continue
-        else:
-            first, second = sample_elements(sorted_elements, elements_to_path)
 
-        recipe = frozenset([first, second])
+            pair = frozenset([first, second])
 
-        # "Nothing" is not actually an element you can use for crafting
-        # It shouldn't be part of the elements anyways, but this is an extra safety barrier
-        if recipe in recipes or "Nothing" in recipe:
-            if interactive:
+            if pair in recipes or "Nothing" in pair:
                 rich.print("[grey50]Already known recipe!")
-            logger.debug("Rejecting known recipe")
-            continue
+                continue
+
+            pairs = [pair]
+        else:
+            pairs = [
+                sample_elements(sorted_elements, elements_to_path, recipes=recipes) for _ in range(num_parallel_crafts)
+            ]
 
         if not interactive:
             if t:
-                logger.debug(f"{(time.perf_counter() - t) * 1_000:.3g}ms (Iteration)")
-            # TODO: sleep based on how long ago the last request was made (such that there is a fixed time in between requests)
-            # ? or maybe rather a fixed time in between a response being received and a new reqeust being made?
-            time.sleep(delay_s)
-            #! carefully monitor... but it seems like I'm not getting rate limited anymore, even without this sleep
-            # TODO in case this reliably works, think about trying multi-threading/async to increase the rate of requests
+                iteration_time = time.perf_counter() - t
+                logger.debug(f"{iteration_time * 1_000:.3g}ms (Iteration)")
+            if t_total and (total_loop_time := time.perf_counter() - t_total) < delay_s:
+                # TODO: sleep based on how long ago the last request was made (such that there is a fixed time in between requests)
+                # ? or maybe rather a fixed time in between a response being received and a new reqeust being made?
+                time.sleep(delay_s - total_loop_time)
+                #! carefully monitor... but it seems like I'm not getting rate limited anymore, even without this sleep
+                # TODO in case this reliably works, think about trying multi-threading/async to increase the rate of requests
+            t_total = time.perf_counter()
 
-        result = craft_items(first, second)
+        with ThreadPool(processes=num_parallel_crafts) as pool:
+            results = pool.starmap(craft_items, (tuple(pair) for pair in pairs))
+        
         t = time.perf_counter()
-        if not result:
-            continue
 
-        print(".", end="")
-        sys.stdout.flush()  # required to correctly display this in Windows Terminal
+        for recipe, result in zip(pairs, results):
+            first, second = tuple(recipe)
 
-        recipes.add(recipe)
-        add_element(RECIPES_JSON, {"first": first, "second": second, "result": result["result"]})
+            if not result:
+                continue
 
-        new_element_name = result["result"]
-        # "Nothing" is not actually an element, but the indication of a recipe being invalid.
-        # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
-        if new_element_name == "Nothing":
-            if interactive:
-                rich.print("[grey50]Nothing")
-            continue
+            print(".", end="")
+            sys.stdout.flush()  # required to correctly display this in Windows Terminal
 
-        new_element_path = elements_to_path[first] | elements_to_path[second] | {new_element_name}
+            recipes.add(recipe)
+            add_element(RECIPES_JSON, {"first": first, "second": second, "result": result["result"]})
 
-        if new_element_name in elements_to_path:
-            if interactive:
-                rich.print(f"[grey50]Already known result: {new_element_name}")
+            new_element_name = result["result"]
+            # "Nothing" is not actually an element, but the indication of a recipe being invalid.
+            # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
+            if new_element_name == "Nothing":
+                if interactive:
+                    rich.print("[grey50]Nothing")
+                continue
 
-            old_length = len(elements_to_path[new_element_name])
-            new_length = len(new_element_path)
-            if new_length < old_length:
-                print_finding(
-                    new_element=result, depth=new_length, previous_depth=old_length, first=first, second=second
-                )
-                elements_to_path[new_element_name] = new_element_path
-                # sort again, such that the element moves to its new correct place in the list
-                # (now that its path is shorter)
-                sorted_elements.sort(key=lambda el: len(elements_to_path[el]))
+            new_element_path = elements_to_path[first] | elements_to_path[second] | {new_element_name}
 
-            continue
+            if new_element_name in elements_to_path:
+                if interactive:
+                    rich.print(f"[grey50]Already known result: {new_element_name}")
 
-        # actually new element
+                old_length = len(elements_to_path[new_element_name])
+                new_length = len(new_element_path)
+                if new_length < old_length:
+                    print_finding(
+                        new_element=result, depth=new_length, previous_depth=old_length, first=first, second=second
+                    )
+                    elements_to_path[new_element_name] = new_element_path
+                    # sort again, such that the element moves to its new correct place in the list
+                    # (now that its path is shorter)
+                    sorted_elements.sort(key=lambda el: len(elements_to_path[el]))
 
-        elements_to_path[new_element_name] = new_element_path
-        # add at correct index (keeping it sorted) using bisection
-        bisect.insort(sorted_elements, new_element_name, key=lambda el_name: len(elements_to_path[el_name]))
-        add_element(ELEMENTS_JSON, {"text": result["result"], "emoji": result["emoji"], "discovered": result["isNew"]})
+                continue
 
-        print_finding(new_element=result, depth=len(new_element_path), first=first, second=second)
+            # actually new element
+
+            elements_to_path[new_element_name] = new_element_path
+            # add at correct index (keeping it sorted) using bisection
+            bisect.insort(sorted_elements, new_element_name, key=lambda el_name: len(elements_to_path[el_name]))
+            add_element(ELEMENTS_JSON, {"text": result["result"], "emoji": result["emoji"], "discovered": result["isNew"]})
+
+            print_finding(new_element=result, depth=len(new_element_path), first=first, second=second)
 
 
 def print_finding(
@@ -204,7 +252,9 @@ def print_finding(
     rich.print(f"{color_str}{new_element_str:<50} {depth_str:>12} {ingredients_str}")
 
 
-def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[str]]) -> tuple[str, str]:
+def sample_elements(
+    sorted_elements: list[str], elements_to_path: dict[str, set[str]], recipes: set[frozenset]
+) -> frozenset[str]:
     num_elements = len(sorted_elements)
 
     mean = 0
@@ -217,6 +267,10 @@ def sample_elements(sorted_elements: list[str], elements_to_path: dict[str, set[
             i, j = int(abs(i)), int(abs(j))
 
         first_name, second_name = sorted_elements[i], sorted_elements[j]
+        recipe = frozenset([first_name, second_name])
+        if recipe in recipes:
+            continue
+
         first_path, second_path = elements_to_path[first_name], elements_to_path[second_name]
 
         path_lengths = len(first_path), len(second_path)
@@ -298,14 +352,11 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
         (logger.debug if t < 2 else logger.info)(f"{t:.3g}s (Request)")
 
         if response.ok:
-            if delay_s > MIN_DELAY_S:
-                delay_s = max(MIN_DELAY_S, delay_s / 2)
-                logger.debug(f"Reducing delay to {delay_s:.3g}s")
+            update_delay(increase=False)
             return response.json()
         else:
             logger.warning(f"Crafting failed: {response.status_code} {response.reason}")
-            delay_s = min(MAX_DELAY_S, delay_s * 2)
-            logger.info(f"Backing off - delay = {delay_s:.3g}s")
+            update_delay(increase=True)
     except Exception as e:
         logger.warning(f"Crafting failed: {e}")
 
