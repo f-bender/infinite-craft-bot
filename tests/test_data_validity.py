@@ -60,3 +60,6 @@ def test_made_elements_are_saved() -> None:
 
 def test_nothing_not_in_elements() -> None:
     assert not "Nothing" in elements
+
+def test_no_duplicate_recipes() -> None:
+    assert len(recipes) == sum(1 for _ in RECIPES_JSON.open("r", encoding="UTF-8")) - 4
