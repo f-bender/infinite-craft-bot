@@ -56,3 +56,7 @@ def test_made_elements_are_saved() -> None:
             elements_not_saved.append(element)
 
     assert not elements_not_saved, pformat(elements_not_saved)
+
+
+def test_nothing_not_in_elements() -> None:
+    assert not "Nothing" in elements
