@@ -72,7 +72,7 @@ console_handler.setFormatter(formatter)
 # Add the console handler to the logger
 logger.addHandler(console_handler)
 
-MAX_NUM_PARALLEL_CRAFTS = 5
+MAX_NUM_PARALLEL_CRAFTS = 9
 num_parallel_crafts: int = 1
 
 #! suspected rate limit: 5 requests per second (it's definitely no higher than that! and most likely not lower!)
@@ -81,7 +81,10 @@ num_parallel_crafts: int = 1
 #! => 2 parallel requests every 0.4 seconds!
 #! OR: 5 parallel requests every 1 second
 #! (sometime requests take up to 0.5 seconds, in that case this is slightly faster over time)
-MIN_DELAY_S = 1.0
+
+#! UPDATE: 5 per second works for 10mins, then it rate limits you! Maybe try 4/s next
+#! UPDATE: 4 requiests per second works consistently!
+MIN_DELAY_S = 2.0
 MAX_DELAY_S = 64.0
 
 delay_s = MIN_DELAY_S
@@ -169,9 +172,15 @@ def main() -> NoReturn:
 
             pairs = [pair]
         else:
-            pairs = [
-                sample_elements(sorted_elements, elements_to_path, recipes=recipes) for _ in range(num_parallel_crafts)
-            ]
+            while True:
+                pairs = [
+                    sample_elements(sorted_elements, elements_to_path, recipes=recipes)
+                    for _ in range(num_parallel_crafts)
+                ]
+                if len(pairs) == len(set(pairs)):
+                    break
+
+                logger.info("Re-sampling because we sampled the same pair twice")
 
         if not interactive:
             if t:
@@ -186,18 +195,15 @@ def main() -> NoReturn:
             t_total = time.perf_counter()
 
         with ThreadPool(processes=num_parallel_crafts) as pool:
-            results = pool.starmap(craft_items, (tuple(pair) for pair in pairs))
-        
+            results = pool.starmap(craft_items, (tuple(pair) if len(pair) == 2 else tuple(pair) * 2 for pair in pairs))
+
         t = time.perf_counter()
 
         for recipe, result in zip(pairs, results):
-            first, second = tuple(recipe)
+            first, second = tuple(recipe) if len(recipe) == 2 else tuple(recipe) * 2
 
             if not result:
                 continue
-
-            print(".", end="")
-            sys.stdout.flush()  # required to correctly display this in Windows Terminal
 
             recipes.add(recipe)
             add_element(RECIPES_JSON, {"first": first, "second": second, "result": result["result"]})
@@ -234,7 +240,9 @@ def main() -> NoReturn:
             elements_to_path[new_element_name] = new_element_path
             # add at correct index (keeping it sorted) using bisection
             bisect.insort(sorted_elements, new_element_name, key=lambda el_name: len(elements_to_path[el_name]))
-            add_element(ELEMENTS_JSON, {"text": result["result"], "emoji": result["emoji"], "discovered": result["isNew"]})
+            add_element(
+                ELEMENTS_JSON, {"text": result["result"], "emoji": result["emoji"], "discovered": result["isNew"]}
+            )
 
             print_finding(new_element=result, depth=len(new_element_path), first=first, second=second)
 
@@ -287,7 +295,7 @@ def sample_elements(
             f"prob {keep_probability:.3g} ({(first_name, second_name)})"
         )
         if random.random() < keep_probability:
-            return first_name, second_name
+            return recipe
 
 
 def load_elements(file: Path) -> dict[str, list[dict[str, str]]]:
@@ -352,6 +360,9 @@ def craft_items(item1: str, item2: str) -> Optional[dict[str, str]]:
         (logger.debug if t < 2 else logger.info)(f"{t:.3g}s (Request)")
 
         if response.ok:
+            print(".", end="")
+            sys.stdout.flush()  # required to correctly display this in Windows Terminal
+
             update_delay(increase=False)
             return response.json()
         else:
