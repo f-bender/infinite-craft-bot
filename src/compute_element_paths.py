@@ -83,6 +83,7 @@ def compute_stats(elements: dict[str, tuple[Optional[tuple[str, str]], set[str]]
     plt.bar(*zip(*depth_counts.items()))
     plt.xlabel("Depth of Element")
     plt.ylabel("Number of Elements")
+    plt.yscale("log")
     plt.savefig(PROJECT_ROOT / "data" / "stats.svg")
 
 
