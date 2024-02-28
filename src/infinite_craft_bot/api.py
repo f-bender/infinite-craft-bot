@@ -46,7 +46,7 @@ def craft_items(first: str, second: str, session: Optional[requests.Session] = N
         return None
 
     request_duration = time.perf_counter() - before_request
-    (logger.debug if request_duration < 2 else logger.info)(f"{request_duration:.3g}s (Request)")
+    (logger.debug if request_duration < 5 else logger.info)(f"{request_duration:.3g}s (Request)")
 
     if response.ok:
         element_json = response.json()

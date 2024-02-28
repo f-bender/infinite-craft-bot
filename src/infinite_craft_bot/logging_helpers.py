@@ -11,26 +11,30 @@ def configure_logging(log_dir: Path = PROJECT_ROOT / "logs") -> None:
     logging.getLogger().setLevel(logging.DEBUG)
 
     # Create formatter
-    formatter = logging.Formatter(
-        "%(asctime)s - [%(thread)d] %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
+    file_formatter = logging.Formatter(
+        "%(asctime)s - [%(thread)5d] %(name)-50s - %(levelname)-8s - %(message)s", datefmt="%H:%M:%S"
     )
 
     # Create TimedRotatingFileHandler for all log messages
     rotating_handler = TimedRotatingFileHandler(log_dir / "debug.log", when="S", interval=300, backupCount=1)
     rotating_handler.setLevel(logging.DEBUG)
-    rotating_handler.setFormatter(formatter)
+    rotating_handler.setFormatter(file_formatter)
     logging.getLogger().addHandler(rotating_handler)
 
     # Create TimedRotatingFileHandler for INFO and above
     info_handler = TimedRotatingFileHandler(log_dir / "info.log", when="H", interval=2, backupCount=1)
     info_handler.setLevel(logging.INFO)
-    info_handler.setFormatter(formatter)
+    info_handler.setFormatter(file_formatter)
     logging.getLogger().addHandler(info_handler)
+
+    console_formatter = logging.Formatter(
+        "%(asctime)s - [%(thread)d] %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
+    )
 
     # Create console handler for warnings and above
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.WARNING)
-    console_handler.setFormatter(formatter)
+    console_handler.setFormatter(console_formatter)
     logging.getLogger().addHandler(console_handler)
 
     logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
