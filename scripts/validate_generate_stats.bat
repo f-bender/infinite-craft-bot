@@ -1,3 +1,3 @@
 @echo off
-cd %~dp0/..
-poetry run pytest && poetry run python src/compute_element_paths.py
+cd %~dp0/../src
+poetry run python -m pytest ../tests && poetry run python compute_element_paths.py

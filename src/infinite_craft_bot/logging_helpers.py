@@ -12,7 +12,7 @@ def configure_logging(log_dir: Path = PROJECT_ROOT / "logs") -> None:
 
     # Create formatter
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s [%(thread)d] - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
+        "%(asctime)s - [%(thread)d] %(name)s - %(levelname)s - %(message)s", datefmt="%H:%M:%S"
     )
 
     # Create TimedRotatingFileHandler for all log messages

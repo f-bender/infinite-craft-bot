@@ -1,4 +1,4 @@
 @echo off
-cd %~dp0/..
-poetry run pytest && poetry run python src/compute_element_paths.py && poetry run python src/query_full_recipe.py
+cd %~dp0/../src
+poetry run python -m pytest ../tests && poetry run python compute_element_paths.py && poetry run python query_full_recipe.py
 pause

@@ -1,9 +1,10 @@
-from io import BytesIO
+from io import BytesIO, StringIO
 import os
 from pathlib import Path
 import json
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
+from pprint import pformat
 from typing import Any, Iterable, Optional
 
 import fasteners
@@ -31,6 +32,10 @@ class WriteAccessLocked(Exception):
 
 
 class NoWriteAccess(Exception):
+    pass
+
+
+class DataError(Exception):
     pass
 
 
@@ -93,10 +98,39 @@ class FileRepository:
         }
         """
         with self.recipes_json.open("r", encoding="UTF-8") as f:
-            return OrderedDict(
-                (frozenset([recipe["first"], recipe["second"]]), recipe["result"]) for recipe in json.load(f)["recipes"]
+            raw_recipes_list = json.load(f)["recipes"]
+
+        result = OrderedDict(
+            (frozenset((recipe["first"], recipe["second"])), recipe["result"]) for recipe in raw_recipes_list
+        )
+
+        if len(result) != len(raw_recipes_list):
+            raise DataError(
+                f"{self.recipes_json} contains duplicated recipes:\n"
+                + pformat(self._find_duplicate_recipes(raw_recipes_list))
             )
 
+        return result
+
+    @staticmethod
+    def _find_duplicate_recipes(raw_recipes_list: list[dict[str, str]]) -> list[dict[str, str]]:
+        # not in dict -> not seen yet
+        # value False -> seen once, not yet added to duplicates list
+        # value True -> seen more than once, is already added to duplicates list
+        seen: dict[frozenset[str], bool] = {}
+        duplicates = []
+        for recipe in raw_recipes_list:
+            recipe_frozenset = frozenset((recipe["first"], recipe["second"]))
+            match seen.get(recipe_frozenset):
+                case None:
+                    seen[recipe_frozenset] = False
+                case False:
+                    duplicates.append(recipe)
+                    seen[recipe_frozenset] = True
+
+        return duplicates
+
+    # TODO: check that there are no duplicate elements (similar to load_recipes) (simply check name ("text" field))
     def load_elements(self) -> set[Element]:
         """Returns the elements, as a set, loaded from a json file.
 
@@ -140,8 +174,8 @@ class FileRepository:
                 indent=4,
             )
 
-    def save_arbitrary_binary_file(
-        self, content: BytesIO, filename: str, subdirs: Optional[Iterable[str]] = None
+    def save_arbitrary_data_to_file(
+        self, content: BytesIO | StringIO, filename: str, subdirs: Optional[Iterable[str]] = None
     ) -> None:
         file_path = self.data_dir
         for subdir in subdirs or []:
@@ -151,7 +185,7 @@ class FileRepository:
         if file_path in (self.elements_json, self.elements_paths_json, self.recipes_json):
             raise ValueError(f"The filename '{filename}' is not allowed as it's used internally!")
 
-        with file_path.open("wb") as f:
+        with file_path.open("wb" if isinstance(content, BytesIO) else "w") as f:
             f.write(content.getvalue())
 
     def add_element(self, element: Element) -> None:
