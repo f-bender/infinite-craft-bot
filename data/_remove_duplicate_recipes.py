@@ -15,16 +15,23 @@ seen_recipes: set[frozenset[str]] = set()
 lines: list[str] = []
 with RECIPES_JSON.open("r", encoding="UTF-8") as f:
     for line in f:
-        if not line.startswith(" " * 8):
+        if line in ("{\n", '    "recpies": [\n', "    ]\n", "}"):
             lines.append(line)
             continue
+
+        if not line.startswith(" "* 8 + '{"first": "') and line.endswith('"},\n'):
+            print(f"irregular line: '{line}'")
+
         recipe_dict = json.loads(line.strip().rstrip(","))
         recipe = frozenset([recipe_dict["first"], recipe_dict["second"]])
         if recipe in seen_recipes:
+            print(f"removing duplicate of {recipe}")
             continue
 
         seen_recipes.add(recipe)
         lines.append(line)
+
+print(len(lines) - 4)
 
 with UNIQUE_RECIPES_JSON.open("w", encoding="UTF-8") as f:
     f.write("".join(lines))

@@ -27,5 +27,13 @@ def remove_duplicates(l):
         r.append(elem)
     return r
 
+print(len(recipes))
+print(len(recipes_unique))
+
+recipes_without_duplicates = remove_duplicates(recipes)
+recipes_unique_without_duplicates = remove_duplicates(recipes_unique)
+
+print(len(recipes_without_duplicates))
+print(len(recipes_unique_without_duplicates))
 
 assert remove_duplicates(recipes) == remove_duplicates(recipes_unique)
