@@ -30,3 +30,5 @@ def main() -> None:
     #! and so on
 
     # TODO: use git LFS for files inside data/
+
+    # TODO: file pagination for recipes and elements (limit to e.g. 100k items/lines per file)

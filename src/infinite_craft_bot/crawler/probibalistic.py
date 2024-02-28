@@ -4,20 +4,19 @@ Sampling can be skewed towards high or low depth, or completely random.
 """
 
 import bisect
-import concurrent.futures
-from contextlib import nullcontext
-from enum import Enum, auto
-from functools import partial
 import logging
 import sys
 import threading
+from contextlib import nullcontext
+from enum import Enum, auto
 from typing import NoReturn, Optional
 
 import rich
-from infinite_craft_bot.api import craft_items
 
+from infinite_craft_bot.api import craft_items
 from infinite_craft_bot.crawler import sample_elements
-from infinite_craft_bot.persistence import Element, FileRepository,  WriteAccessLocked
+from infinite_craft_bot.logging_helpers import LogElapsedTime
+from infinite_craft_bot.persistence import Element, FileRepository, WriteAccessLocked
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +35,16 @@ class ProbibalisticCrawler:
     # pytorch lightning; I imagine it just like this video shows:
     # https://lightning.ai/docs/pytorch/stable/_static/fetched-s3-assets/pl_readme_gif_2_0.mp4 )
     # then low-depth, random, and high-depth are separate subclasses of crawler, just lite interactive and brute-force
+    # * NOTE: this accepts some ugliness in the super-class, traded in for conciseness in the sub-classes
 
     def __init__(self, sampling_strategy: SamplingStrategy, repository: FileRepository) -> None:
         # The repository itself is responsible for making sure that it is the only instance that has write access to its
         # underlying files. We as the crawler are responsible for making sure that we don't use its writing functions
         # concurrently.
         self.repository = repository
-        if not self.repository.acquire_write_access():  # we need write access to add elements and repices to the repository
+        if (
+            not self.repository.acquire_write_access()
+        ):  # we need write access to add elements and repices to the repository
             raise WriteAccessLocked()
 
         elements = repository.load_elements()
@@ -58,102 +60,135 @@ class ProbibalisticCrawler:
 
         match sampling_strategy:
             case SamplingStrategy.LOW_DEPTH:
-                self.sampling_function = partial(
-                    sample_elements.skewed_towards_low_depth,
-                    elements_sorted_ascending_by_depth=self.sorted_elements,
-                    elements_to_path=self.elements_to_path,
-                    discard_result_predicate=lambda ingredients: frozenset(ingredients) in self.recipes,
-                )
+                self.sampling_function = self._low_depth_sampling_strategy
             case SamplingStrategy.RANDOM:
-                self.sampling_function = partial(
-                    sample_elements.fully_random,
-                    discard_result_predicate=lambda ingredients: frozenset(ingredients) in self.recipes,
-                )
+                self.sampling_function = self._random_sampling_strategy
             case SamplingStrategy.HIGH_DEPTH:
                 raise NotImplementedError()
 
-        self.elements_lock: Optional[threading.Lock] = None
+        # in case multiple locks need to be acquired, they should always be acquired in the order in which they are
+        # listed here (which happens to be longest name to shortest name)!
+        self.elements_repository_lock: Optional[threading.Lock] = None
+        self.recipes_repository_lock: Optional[threading.Lock] = None
+        self.elements_to_path_lock: Optional[threading.Lock] = None
+        self.sorted_elements_lock: Optional[threading.Lock] = None
         self.recipes_lock: Optional[threading.Lock] = None
 
-    # TODO make CTRL+C actually work (maybe needs to be handled within the thread)
-    # maybe this requires using simple threading.Threads (which would be ok with me actually)
-    def crawl_multithreaded(self, num_threads: int) -> None:
-        # one idea would be to have the threads send messages (in Rust this would be using channels, in Pyhton I'm not
-        # sure...), and let this main thread collect these message and process them by writing them to files etc.
-        # but due to the lack of true parallelism due to the GIL, I might as well just do IO in every single thread
-        self.elements_lock = threading.Lock()
+    def _low_depth_sampling_strategy(self) -> tuple[str, str]:
+        with (
+            self.elements_to_path_lock or nullcontext(),
+            self.sorted_elements_lock or nullcontext(),
+            self.recipes_lock or nullcontext(),
+        ):
+            return sample_elements.skewed_towards_low_depth(
+                elements_sorted_ascending_by_depth=self.sorted_elements,
+                elements_to_path=self.elements_to_path,
+                discard_result_predicate=lambda ingredients: frozenset(ingredients) in self.recipes,
+            )
+
+    def _random_sampling_strategy(self) -> tuple[str, str]:
+        #! elements actually don't need to be sorted here... another reason to just split every single version off
+        #! into its own class (and use the pytorch lightning model)
+        with self.sorted_elements_lock or nullcontext(), self.recipes_lock or nullcontext():
+            return sample_elements.fully_random(
+                elements=self.sorted_elements,
+                discard_result_predicate=lambda ingredients: frozenset(ingredients) in self.recipes,
+            )
+
+    def crawl_multithreaded(self, num_threads: int) -> NoReturn:
+        if num_threads <= 1:
+            raise ValueError("`num_threads` must be at least 2! To crawl single-threadedly, call `crawl()` directly.")
+
+        self.elements_repository_lock = threading.Lock()
+        self.recipes_repository_lock = threading.Lock()
+        self.elements_to_path_lock = threading.Lock()
+        self.sorted_elements_lock = threading.Lock()
         self.recipes_lock = threading.Lock()
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [executor.submit(self.crawl) for _ in range(num_threads)]
+        for _ in range(num_threads - 1):
+            threading.Thread(target=self.crawl, daemon=True).start()
 
-            try:
-                concurrent.futures.wait(futures)
-            except KeyboardInterrupt:
-                print("Interrupting all threads")
-                for future in futures:
-                    future.cancel()
-
-        self.elements_lock = self.recipes_lock = None
+        try:
+            self.crawl()
+        except KeyboardInterrupt:
+            sys.exit(0)
 
     def crawl(self) -> NoReturn:
+        logger.debug("Starting to crawl...")
         while True:
-            first, second = self.sampling_function()
-            result_element = craft_items(first, second)
+            with LogElapsedTime(log_func=logger.debug, label="Sampling"):
+                first, second = self.sampling_function()
 
-            if not result_element:
-                continue
+            result_element: Optional[Element] = craft_items(first, second)
 
-            # TODO: change to `self.ui.indicate_request_started()` (or rather finished...)
-            print(".", end="")
-            sys.stdout.flush()  # required to correctly display this in Windows Terminal
-            # TODO/
+            with LogElapsedTime(log_func=logger.debug, label="Iteration"):
+                if not result_element:
+                    continue
 
-            recipe = frozenset((first, second))
-            self.recipes.add(recipe)
+                # TODO: change to `self.ui.indicate_request_started()` (or rather finished...)
+                print(".", end="")
+                sys.stdout.flush()  # required to correctly display this in Windows Terminal
+                # TODO/
 
-            with self.recipes_lock or nullcontext():
-                self.repository.add_recipe(ingredients=recipe, result=result_element.text)
+                recipe = frozenset((first, second))
+                with self.recipes_lock or nullcontext():
+                    self.recipes.add(recipe)
 
-            # "Nothing" is not actually an element, but the indication of a recipe being invalid.
-            # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
-            if result_element.text == "Nothing":
-                continue
+                with self.recipes_repository_lock or nullcontext():
+                    self.repository.add_recipe(ingredients=recipe, result=result_element.text)
 
-            new_element_path = self.elements_to_path[first] | self.elements_to_path[second] | {result_element.text}
+                # "Nothing" is not actually an element, but the indication of a recipe being invalid.
+                # We still want to save recipes resulting in "Nothing", but it should not be saved as an element
+                if result_element.text == "Nothing":
+                    continue
 
-            if result_element.text in self.elements_to_path:
-                old_length = len(self.elements_to_path[result_element.text])
-                new_length = len(new_element_path)
-                if new_length < old_length:
-                    # TODO: self.ui.print_finding() (or similar)
-                    self.print_finding(
-                        new_element=result_element,
-                        depth=new_length,
-                        previous_depth=old_length,
-                        first=first,
-                        second=second,
+                with self.elements_to_path_lock or nullcontext():
+                    new_element_path = (
+                        self.elements_to_path[first] | self.elements_to_path[second] | {result_element.text}
                     )
-                    # TODO/
+
+                if result_element.text in self.elements_to_path:
+                    with self.elements_to_path_lock or nullcontext():
+                        old_length = len(self.elements_to_path[result_element.text])
+                    new_length = len(new_element_path)
+
+                    if new_length < old_length:
+                        # TODO: self.ui.print_finding() (or similar)
+                        self.print_finding(
+                            new_element=result_element,
+                            depth=new_length,
+                            previous_depth=old_length,
+                            first=first,
+                            second=second,
+                        )
+                        # TODO/
+                        with self.elements_to_path_lock or nullcontext():
+                            self.elements_to_path[result_element.text] = new_element_path
+                        # sort again, such that the element moves to its new correct place in the list
+                        # (now that its path is shorter)
+                        with self.sorted_elements_lock or nullcontext():
+                            self.sorted_elements.sort(key=lambda el: len(self.elements_to_path[el]))
+                    continue
+
+                # actually new element
+
+                with self.elements_to_path_lock or nullcontext():
                     self.elements_to_path[result_element.text] = new_element_path
-                    # sort again, such that the element moves to its new correct place in the list
-                    # (now that its path is shorter)
-                    self.sorted_elements.sort(key=lambda el: len(self.elements_to_path[el]))
-                continue
 
-            # actually new element
+                with self.elements_repository_lock or nullcontext():
+                    self.repository.add_element(result_element)
 
-            self.elements_to_path[result_element.text] = new_element_path
-            # add at correct index (keeping it sorted) using bisection
-            bisect.insort(
-                self.sorted_elements, result_element.text, key=lambda el_name: len(self.elements_to_path[el_name])
-            )
-            with self.elements_lock or nullcontext():
-                self.repository.add_element(result_element)
+                # add at correct index (keeping it sorted) using bisection
+                with self.elements_to_path_lock or nullcontext(), self.sorted_elements_lock or nullcontext():
+                    bisect.insort(
+                        self.sorted_elements,
+                        result_element.text,
+                        key=lambda el_name: len(self.elements_to_path[el_name]),
+                    )
 
-            # TODO: self.ui.print_finding(new_element=result_element, depth=len(new_element_path), first=first, second=second)
-            self.print_finding(new_element=result_element, depth=len(new_element_path), first=first, second=second)
-            # TODO/
+                # TODO: self.ui.print_finding(new_element=result_element, depth=len(new_element_path), first=first, second=second)
+                self.print_finding(new_element=result_element, depth=len(new_element_path), first=first, second=second)
+                # TODO/
 
     # TODO move to ui class
     @staticmethod

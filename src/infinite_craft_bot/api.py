@@ -33,7 +33,7 @@ class ApiChanged(Exception):
 
 # TODO observe how well `ratelimit` works (alternative: https://github.com/vutran1710/PyrateLimiter)
 @sleep_and_retry
-@limits(calls=24, period=5)  # 24 requests every 5s (just below 5/s)
+@limits(calls=14, period=3)  # below 5/s!
 def craft_items(first: str, second: str, session: Optional[requests.Session] = None) -> Optional[Element]:
     get = session.get if session else requests.get
 
@@ -43,6 +43,7 @@ def craft_items(first: str, second: str, session: Optional[requests.Session] = N
         response = get(URL_TEMPLATE.format(first=first, second=second), headers=HEADERS, timeout=10)
     except Exception as e:
         logger.warning(f"Crafting failed: {e}")
+        return None
 
     request_duration = time.perf_counter() - before_request
     (logger.debug if request_duration < 2 else logger.info)(f"{request_duration:.3g}s (Request)")
@@ -56,5 +57,7 @@ def craft_items(first: str, second: str, session: Optional[requests.Session] = N
 
         return Element(text=element_json["result"], emoji=element_json["emoji"], discovered=element_json["isNew"])
 
+    # TODO in case of a 429 "Too Many Requests" error, the response header contains the number of seconds until we're
+    # allowed to make reqeusts again. Read this, and sleep for that time!
     logger.warning(f"Crafting failed: {response.status_code} {response.reason}")
     return None
