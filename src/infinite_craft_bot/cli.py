@@ -1,5 +1,7 @@
 import logging
+import sys
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
+from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
 from infinite_craft_bot.persistence import FileRepository
 
 
@@ -10,8 +12,12 @@ def main() -> None:
     """TODO: Create CLI entrypoint."""
     # query_main()
 
-    crawler = ProbibalisticCrawler(sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=FileRepository())
-    crawler.crawl_multithreaded(num_threads=5)
+    if "-p" in sys.argv[1:]:
+        compute_and_save_elements_paths(repository=FileRepository())
+    else:
+        crawler = ProbibalisticCrawler(sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=FileRepository())
+        crawler.crawl_multithreaded(num_threads=5)
+
 
     # TODO commandline arg parsing, mode choosing, delegating to the right crawler etc.
 

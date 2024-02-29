@@ -7,6 +7,7 @@ from rich import print
 from infinite_craft_bot.persistence import FileRepository
 
 
+# TODO separate stats from plot
 def compute_stats(elements: dict[str, tuple[Optional[tuple[str, str]], set[str]]], repository: FileRepository) -> None:
     depth_counts = Counter([len(path) for _, path in elements.values()])
 
@@ -26,4 +27,6 @@ def compute_stats(elements: dict[str, tuple[Optional[tuple[str, str]], set[str]]
 
     plt.close()
 
-    repository.save_arbitrary_binary_file(svg_bytes_io, "depths.svg")
+    repository.save_arbitrary_data_to_file(svg_bytes_io, subdirs=["stats"], filename="depths.svg")
+
+# TODO main method where elements_paths are read from repoistory, and then stats are calculated and plots made
