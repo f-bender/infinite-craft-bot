@@ -163,10 +163,10 @@ class FileRepository:
 
     def save_element_paths(self, elements_paths: dict[str, ElementPath]) -> None:
         """This will overwrite the current elements_paths json file."""
-        with self.elements_json.open("w", encoding="UTF-8") as f:
+        with self.elements_paths_json.open("w", encoding="UTF-8") as f:
             json.dump(
                 {
-                    element_name: {"anc": element_path.ancestors, "path": element_path.path}
+                    element_name: {"anc": element_path.ancestors, "path": list(element_path.path)}
                     for element_name, element_path in elements_paths.items()
                 },
                 f,
