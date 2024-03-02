@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from functools import reduce
 from itertools import chain, combinations
-from typing import Callable, Collection, Iterable, NoReturn, Optional
+from typing import Callable, Collection, Iterable, Optional
+
 from rich import print
 
 from infinite_craft_bot.persistence import FileRepository
@@ -47,7 +48,9 @@ class FullRecipeQuery:
     def name_variations(element_name: str) -> Iterable[str]:
         transformations: list[Callable[[str], str]] = [
             lambda s: s.replace("'", "’"),
-            # str.title also capitalizes after special character which we don't want
+            str.title,
+            str.upper,
+            # str.title also capitalizes after special character
             lambda s: " ".join(word.capitalize() for word in s.split()),
         ]
 
@@ -84,29 +87,3 @@ def print_full_recipe(operations: list[Operation]) -> None:
 
     for operation in operations:
         print(f"{operation.first:>{first_max_length}} + {operation.second:<{second_max_length}} = {operation.result}")
-
-
-# ? Where should this function eventually go? cli.py doesn't feel right, that should only do minor setup, and then
-# ? delegate to other modules/functions which contain the logic... but maybe this is okay to be a function inside cli.py...
-# ? or maybe it even makes sense for this to stay here? but that doesn't really feel right... but perhaps
-# ! since this prints to the console, this should definitely move to cli.py (or all the prints have to be abstracted
-# ! and moved to the UI class)
-def main() -> None:
-    query = FullRecipeQuery(FileRepository())
-
-    while True:
-        print("\n[yellow]Enter an element to get its recipe:", end=" ")
-        try:
-            element = input().strip()
-        except KeyboardInterrupt:
-            return
-        print()
-
-        if (operations := query.query_full_recipe(element)) is not None:
-            print_full_recipe(operations)
-        else:
-            print("Unknown element!")
-
-
-if __name__ == "__main__":
-    main()

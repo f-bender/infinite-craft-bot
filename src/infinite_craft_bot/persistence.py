@@ -1,9 +1,9 @@
-from io import BytesIO, StringIO
-import os
-from pathlib import Path
 import json
+import os
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
+from io import BytesIO, StringIO
+from pathlib import Path
 from pprint import pformat
 from typing import Any, Iterable, Optional
 
@@ -177,6 +177,8 @@ class FileRepository:
     def save_arbitrary_data_to_file(
         self, content: BytesIO | StringIO, filename: str, subdirs: Optional[Iterable[str]] = None
     ) -> None:
+        # NOTE we don't require write access here because this is a single operation that overwrites the entire file,
+        # i.e. there is basically no risk of multiple threads/processes stepping on each other's feet
         file_path = self.data_dir
         for subdir in subdirs or []:
             file_path = file_path / subdir
@@ -185,17 +187,19 @@ class FileRepository:
         if file_path in (self.elements_json, self.elements_paths_json, self.recipes_json):
             raise ValueError(f"The filename '{filename}' is not allowed as it's used internally!")
 
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
         with file_path.open("wb" if isinstance(content, BytesIO) else "w") as f:
             f.write(content.getvalue())
 
     def add_element(self, element: Element) -> None:
-        if not self.lock.acquired:
+        if not self.has_write_access:
             raise NoWriteAccess()
 
         self._add_item(self.elements_json, asdict(element))
 
     def add_recipe(self, ingredients: frozenset[str], result: str) -> None:
-        if not self.lock.acquired:
+        if not self.has_write_access:
             raise NoWriteAccess()
 
         match len(ingredients):

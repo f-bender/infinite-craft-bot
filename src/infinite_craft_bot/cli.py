@@ -1,23 +1,39 @@
+import argparse
 import logging
-import sys
+
+from rich import print
+
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
 from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
 from infinite_craft_bot.persistence import FileRepository
-
+from infinite_craft_bot.query_full_recipe import FullRecipeQuery, print_full_recipe
 
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    """TODO: Create CLI entrypoint."""
-    # query_main()
+    """CLI entrypoint."""
+    args = parse_args()
 
-    if "-p" in sys.argv[1:]:
-        compute_and_save_elements_paths(repository=FileRepository())
-    else:
-        crawler = ProbibalisticCrawler(sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=FileRepository())
-        crawler.crawl_multithreaded(num_threads=5)
+    if args.compute_element_paths or args.subcommand == "compute_paths":
+        compute_and_save_elements_paths(repository=FileRepository(), save_stats=args.save_path_stats)
 
+    match args.subcommand:
+        case "query":
+            query_full_recipes_continuously()
+        case "crawl":
+            match args.crawl_mode:
+                case "low":
+                    crawler = ProbibalisticCrawler(
+                        sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=FileRepository(write_access=True)
+                    )
+                    crawler.crawl_multithreaded(num_threads=5)
+                case _:
+                    raise ValueError(f"Unknown crawl mode: `{args.crawl_mode}")
+        case "compute_paths":
+            pass
+        case _:
+            raise ValueError(f"Unknown subcommand: '{args.subcommand}'")
 
     # TODO commandline arg parsing, mode choosing, delegating to the right crawler etc.
 
@@ -38,3 +54,47 @@ def main() -> None:
     # TODO: use git LFS for files inside data/
 
     # TODO: file pagination for recipes and elements (limit to e.g. 100k items/lines per file)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("subcommand", type=str, choices=["crawl", "query", "compute_paths"], default="crawl")
+    parser.add_argument(
+        "--compute_element_paths",
+        "-p",
+        action="store_true",
+        help=(
+            "Whether to compute element paths before executing the specified command. Note that up-to-date element "
+            "paths are required for some crawlers to work, and for the recipe queries to give up-to-date information."
+        ),
+    )
+    parser.add_argument(
+        "--save_path_stats",
+        "-s",
+        action="store_true",
+        help=(
+            "Whether to save stats about the element paths after computing them. "
+            "Only has an effect if `--compute_paths` is set."
+        ),
+    )
+    parser.add_argument("--crawl_mode", "-m", type=str, choices=["low"], default="low")  # to be extended
+
+    return parser.parse_args()
+
+
+def query_full_recipes_continuously() -> None:
+    query = FullRecipeQuery(FileRepository())
+
+    while True:
+        print("\n[yellow]Enter an element to get its recipe:", end=" ")
+        try:
+            element = input().strip()
+        except KeyboardInterrupt:
+            return
+        print()
+
+        if (operations := query.query_full_recipe(element)) is not None:
+            print_full_recipe(operations)
+        else:
+            print("Unknown element!")
