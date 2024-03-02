@@ -7,7 +7,10 @@ from typing import Callable, Self
 from infinite_craft_bot.globals import PROJECT_ROOT
 
 
-def configure_logging(log_dir: Path = PROJECT_ROOT / "logs") -> None:
+def configure_logging(subcommand: str, log_dir: Path = PROJECT_ROOT / "logs") -> None:
+    log_dir = log_dir / subcommand
+    log_dir.mkdir(parents=True, exist_ok=True)
+
     logging.getLogger().setLevel(logging.DEBUG)
 
     # Create formatter

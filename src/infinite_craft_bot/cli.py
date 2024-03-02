@@ -5,6 +5,7 @@ from rich import print
 
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
 from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
+from infinite_craft_bot.logging_helpers import configure_logging
 from infinite_craft_bot.persistence import FileRepository
 from infinite_craft_bot.query_full_recipe import FullRecipeQuery, print_full_recipe
 
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     """CLI entrypoint."""
     args = parse_args()
+
+    configure_logging(subcommand=args.subcommand)
 
     if args.compute_element_paths or args.subcommand == "compute_paths":
         compute_and_save_elements_paths(repository=FileRepository(), save_stats=args.save_path_stats)
