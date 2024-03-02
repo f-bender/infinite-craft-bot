@@ -1,6 +1,6 @@
-Count: 68189
- Mean: 14.2064
-  Std: 7.2714
+Count: 71038
+ Mean: 14.2355
+  Std: 7.10376
   Min: 0
   25%: 12
   50%: 14
@@ -10,8 +10,8 @@ Count: 68189
 Deepest elements:
 129: Chicken Nebula
 130: Pancake Weiwei
+130: Elmocon Sharkanoo
 130: Leaker
-133: Elmocon Sharkanoo
 135: Rocking Gyrotron
 137: Pancake Man
 140: Crocodile Trump
@@ -19,4 +19,4 @@ Deepest elements:
 158: Piggy Werewolf
 179: Trump Sushi
 
-Most elements at depth 14 (10294 elements)
+Most elements at depth 14 (10700 elements)
