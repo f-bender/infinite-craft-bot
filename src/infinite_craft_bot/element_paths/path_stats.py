@@ -4,7 +4,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from infinite_craft_bot.persistence import ElementPath, FileRepository
+from infinite_craft_bot.persistence.common import ElementPath, FileRepository
 
 
 def compute_and_save_stats(elements_paths: dict[str, ElementPath], repository: FileRepository) -> None:

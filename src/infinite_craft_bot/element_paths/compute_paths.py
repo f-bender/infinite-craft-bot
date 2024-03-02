@@ -5,7 +5,7 @@ from typing import Iterable, OrderedDict
 import pandas as pd
 
 from infinite_craft_bot.element_paths.path_stats import compute_and_save_stats
-from infinite_craft_bot.persistence import ElementPath, FileRepository
+from infinite_craft_bot.persistence.common import ElementPath, FileRepository
 
 #! This script most likely contains a bug: at commit 'e7a9ce4', Jesus Shark was determined to be the deepest element
 #! at depth 400, and *later*, at commit 'f5c7c69', after more recipes where explored, Jesus Shark was determined to be

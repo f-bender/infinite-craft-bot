@@ -6,7 +6,7 @@ from rich import print
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
 from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
 from infinite_craft_bot.logging_helpers import configure_logging
-from infinite_craft_bot.persistence import FileRepository
+from infinite_craft_bot.persistence.json_file import JsonRepository
 from infinite_craft_bot.query_full_recipe import FullRecipeQuery, print_full_recipe
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ def main() -> None:
     configure_logging(subcommand=args.subcommand)
 
     if args.compute_element_paths or args.subcommand == "compute_paths":
-        compute_and_save_elements_paths(repository=FileRepository(), save_stats=args.save_path_stats)
+        compute_and_save_elements_paths(repository=JsonRepository(), save_stats=args.save_path_stats)
 
     match args.subcommand:
         case "query":
@@ -28,7 +28,7 @@ def main() -> None:
             match args.crawl_mode:
                 case "low":
                     crawler = ProbibalisticCrawler(
-                        sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=FileRepository(write_access=True)
+                        sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=JsonRepository(write_access=True)
                     )
                     crawler.crawl_multithreaded(num_threads=5)
                 case _:
@@ -87,7 +87,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def query_full_recipes_continuously() -> None:
-    query = FullRecipeQuery(FileRepository())
+    query = FullRecipeQuery(JsonRepository())
 
     while True:
         print("\n[yellow]Enter an element to get its recipe:", end=" ")

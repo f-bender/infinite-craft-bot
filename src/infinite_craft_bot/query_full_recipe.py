@@ -5,7 +5,7 @@ from typing import Callable, Collection, Iterable, Optional
 
 from rich import print
 
-from infinite_craft_bot.persistence import FileRepository
+from infinite_craft_bot.persistence.common import FileRepository
 
 
 @dataclass(slots=True, frozen=True)

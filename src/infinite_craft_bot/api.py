@@ -5,7 +5,7 @@ from typing import Optional
 import requests
 from ratelimit import limits, sleep_and_retry
 
-from infinite_craft_bot.persistence import Element
+from infinite_craft_bot.persistence.common import Element
 
 logger = logging.getLogger(__name__)
 

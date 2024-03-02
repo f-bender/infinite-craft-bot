@@ -1,10 +1,8 @@
-import json
-from pathlib import Path
 from pprint import pformat
 
-from infinite_craft_bot.persistence import FileRepository
+from infinite_craft_bot.persistence.json_file import JsonRepository
 
-REPOSITORY = FileRepository()
+REPOSITORY = JsonRepository()
 
 RECIPES = REPOSITORY.load_recipes()
 ELEMENTS = {element.text for element in REPOSITORY.load_elements()}

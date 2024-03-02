@@ -16,7 +16,7 @@ import rich
 from infinite_craft_bot.api import craft_items
 from infinite_craft_bot.crawler import sample_elements
 from infinite_craft_bot.logging_helpers import LogElapsedTime
-from infinite_craft_bot.persistence import Element, FileRepository, WriteAccessLocked
+from infinite_craft_bot.persistence.common import Element, FileRepository, WriteAccessLocked
 
 logger = logging.getLogger(__name__)
 

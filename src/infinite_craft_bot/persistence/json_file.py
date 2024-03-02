@@ -1,47 +1,17 @@
 import json
 import os
 from collections import OrderedDict
-from dataclasses import asdict, dataclass
-from io import BytesIO, StringIO
+from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
-from typing import Any, Iterable, Optional
-
-import fasteners
+from typing import Any
 
 from infinite_craft_bot.globals import PROJECT_ROOT
+from infinite_craft_bot.persistence.common import DataError, Element, ElementPath, FileRepository
 
 
-# NOTE: From a clean architecture standpoint, these classes should be defined in the application core, not in the
-# persistence module. But for now, this is a shortcut I'm taking.
-@dataclass(slots=True, frozen=True)
-class ElementPath:
-    ancestors: Optional[tuple[str, str]]
-    path: set[str]
-
-
-@dataclass(slots=True, frozen=True)
-class Element:
-    text: str
-    emoji: str
-    discovered: bool
-
-
-class WriteAccessLocked(Exception):
-    pass
-
-
-class NoWriteAccess(Exception):
-    pass
-
-
-class DataError(Exception):
-    pass
-
-
-class FileRepository:
-
-    def __init__(self, data_dir: Path = PROJECT_ROOT / "data", write_access: bool = False) -> None:
+class JsonRepository(FileRepository):
+    def __init__(self, data_dir: Path = PROJECT_ROOT / "data" / "json", write_access: bool = False) -> None:
         """Repository of elements and recipes, saved as files.
 
         Args:
@@ -55,30 +25,15 @@ class FileRepository:
             WriteAccessLocked: If write_access is requested, but can't be granted because another instance (or process)
                 already has write access.
         """
-        self.data_dir = data_dir
+        super().__init__(data_dir, write_access)
+
         self.recipes_json = data_dir / "recipes.json"
         self.elements_json = data_dir / "elements.json"
         self.elements_paths_json = data_dir / "elements_paths.json"
 
-        self.lockfile = self.data_dir / ".lock"
-        self.lock = fasteners.InterProcessLock(self.lockfile)
-
-        if write_access:
-            if not self.lock.acquire(blocking=False):
-                raise WriteAccessLocked()
-
     @property
-    def has_write_access(self) -> bool:
-        return self.lock.acquired
-
-    def acquire_write_access(self) -> bool:
-        if not self.lock.acquired:
-            return self.lock.acquire(blocking=False)
-        return True
-
-    def release_write_access(self) -> None:
-        if self.lock.acquired:
-            self.lock.release()
+    def reserved_paths(self) -> tuple[Path, ...]:
+        return (self.recipes_json, self.elements_json, self.elements_paths_json)
 
     def load_recipes(self) -> OrderedDict[frozenset[str], str]:
         """Returns the recipes, as an ordered dict, loaded from a json file.
@@ -174,34 +129,10 @@ class FileRepository:
                 indent=4,
             )
 
-    def save_arbitrary_data_to_file(
-        self, content: BytesIO | StringIO, filename: str, subdirs: Optional[Iterable[str]] = None
-    ) -> None:
-        # NOTE we don't require write access here because this is a single operation that overwrites the entire file,
-        # i.e. there is basically no risk of multiple threads/processes stepping on each other's feet
-        file_path = self.data_dir
-        for subdir in subdirs or []:
-            file_path = file_path / subdir
-
-        file_path = file_path / filename
-        if file_path in (self.elements_json, self.elements_paths_json, self.recipes_json):
-            raise ValueError(f"The filename '{filename}' is not allowed as it's used internally!")
-
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with file_path.open("wb" if isinstance(content, BytesIO) else "w") as f:
-            f.write(content.getvalue())
-
-    def add_element(self, element: Element) -> None:
-        if not self.has_write_access:
-            raise NoWriteAccess()
-
+    def _add_element(self, element: Element) -> None:
         self._add_item(self.elements_json, asdict(element))
 
-    def add_recipe(self, ingredients: frozenset[str], result: str) -> None:
-        if not self.has_write_access:
-            raise NoWriteAccess()
-
+    def _add_recipe(self, ingredients: frozenset[str], result: str) -> None:
         match len(ingredients):
             case 1:
                 (first,) = (second,) = ingredients
