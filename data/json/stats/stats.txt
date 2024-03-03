@@ -1,6 +1,6 @@
-Count: 71038
- Mean: 14.2355
-  Std: 7.10376
+Count: 72616
+ Mean: 14.2559
+  Std: 7.02125
   Min: 0
   25%: 12
   50%: 14
@@ -19,4 +19,4 @@ Deepest elements:
 158: Piggy Werewolf
 179: Trump Sushi
 
-Most elements at depth 14 (10700 elements)
+Most elements at depth 14 (10919 elements)
