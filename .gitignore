@@ -3,3 +3,4 @@ logs/
 !poetry.lock
 __pycache__/
 elements_paths.json
+elements_paths/

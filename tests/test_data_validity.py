@@ -1,8 +1,8 @@
 from pprint import pformat
 
-from infinite_craft_bot.persistence.json_file import JsonRepository
+from infinite_craft_bot.persistence.csv_file import PaginatedCsvRepository
 
-REPOSITORY = JsonRepository()
+REPOSITORY = PaginatedCsvRepository()
 
 RECIPES = REPOSITORY.load_recipes()
 ELEMENTS = {element.text for element in REPOSITORY.load_elements()}

@@ -1,17 +1,17 @@
-import json
+import ast
 from collections import OrderedDict
-from dataclasses import asdict
+from math import ceil
 from pathlib import Path
-from pprint import pformat
 from typing import Iterable
 
-import pandas as pd
+import pandas as pd  # type: ignore
 
 from infinite_craft_bot.globals import PROJECT_ROOT
 from infinite_craft_bot.persistence.common import DataError, Element, ElementPath, FileRepository
 
 # the number of digits that the file names have (3 -> "000.csv", "001.csv", ...)
-NUM_PAGINATION_DIGITS = 3
+NUM_PAGINATION_DIGITS = 5
+ITEMS_PER_FILE = 50_000
 
 
 class PaginatedCsvRepository(FileRepository):
@@ -36,7 +36,12 @@ class PaginatedCsvRepository(FileRepository):
         self.elements_paths_dir = data_dir / "elements_paths"
 
         self.current_recipes_file = self._sorted_pagination_files(self.recipes_dir)[-1]
+        # every line is one item, except for the first line (csv header) -> - 1
+        self.num_recipes_in_current_file = sum(1 for _ in self.current_recipes_file.open("r", encoding="UTF-8")) - 1
+
         self.current_elements_file = self._sorted_pagination_files(self.elements_dir)[-1]
+        # every line is one item, except for the first line (csv header) -> - 1
+        self.num_elements_in_current_file = sum(1 for _ in self.current_elements_file.open("r", encoding="UTF-8")) - 1
 
     @staticmethod
     def _sorted_pagination_files(dir: Path) -> list[Path]:
@@ -56,14 +61,12 @@ class PaginatedCsvRepository(FileRepository):
     def load_recipes(self) -> OrderedDict[frozenset[str], str]:
         recipes_df = pd.concat(pd.read_csv(file) for file in self._sorted_pagination_files(self.recipes_dir))
 
-        result = OrderedDict(
-            (frozenset((recipe["first"], recipe["second"])), recipe["result"]) for _, recipe in recipes_df.iterrows()
-        )
+        result = OrderedDict()
 
-        if len(result) != len(recipes_df):
-            raise DataError(
-                f"{self.recipes_dir} contains duplicated recipes:\n" + pformat(self._find_duplicate_recipes(recipes_df))
-            )
+        def update_result(recipe_row: pd.Series) -> None:
+            result[frozenset((recipe_row["first"], recipe_row["second"]))] = recipe_row["result"]
+
+        recipes_df.apply(update_result, axis=1)  # type: ignore
 
         return result
 
@@ -93,37 +96,79 @@ class PaginatedCsvRepository(FileRepository):
                 f"{self.elements_dir} contains duplicated elements:\n" + elements_df[duplicate_idxs].to_string()
             )
 
-        return {
-            Element(text=element["text"], emoji=element["emoji"], discovered=element["discovered"])
-            for _, element in elements_df.iterrows()
-        }
+        result = set()
 
-    # TODO the rest from here
+        def update_result(element_row: pd.Series) -> None:
+            result.add(
+                Element(text=element_row["text"], emoji=element_row["emoji"], discovered=element_row["discovered"])
+            )
+
+        elements_df.apply(update_result, axis=1)  # type: ignore
+
+        return result
 
     def load_elements_paths(self) -> dict[str, ElementPath]:
-        with self.elements_paths_json.open("r", encoding="UTF-8") as f:
-            return {
-                element: ElementPath(ancestors=props["anc"], path=props["path"])
-                for element, props in json.load(f).items()
-            }
+        elements_paths_df = pd.concat(
+            pd.read_csv(file) for file in self._sorted_pagination_files(self.elements_paths_dir)
+        )
+
+        result = {}
+
+        def update_result(element_path_row: pd.Series) -> None:
+            result[element_path_row["element"]] = ElementPath(
+                ancestors=(
+                    ast.literal_eval(element_path_row["ancestors"])
+                    if not pd.isna(element_path_row["ancestors"])
+                    else None
+                ),
+                path=ast.literal_eval(element_path_row["path"]),
+            )
+
+        elements_paths_df.apply(update_result, axis=1)  # type: ignore
+
+        return result
 
     def save_element_paths(self, elements_paths: dict[str, ElementPath]) -> None:
-        """This will overwrite the current elements_paths json file."""
-        with self.elements_paths_json.open("w", encoding="UTF-8") as f:
-            json.dump(
-                {
-                    element_name: {"anc": element_path.ancestors, "path": list(element_path.path)}
-                    for element_name, element_path in elements_paths.items()
-                },
-                f,
-                ensure_ascii=False,
-                indent=4,
+        """This will overwrite the current elements_paths files."""
+        elements_paths_df = pd.DataFrame(
+            [
+                {"element": element, "ancestors": el_path.ancestors, "path": el_path.path}
+                for element, el_path in elements_paths.items()
+            ]
+        )
+
+        self.elements_paths_dir.mkdir(exist_ok=True)
+
+        for page in range(ceil(len(elements_paths_df) / ITEMS_PER_FILE)):
+            elements_paths_df[page * ITEMS_PER_FILE : (page + 1) * ITEMS_PER_FILE].to_csv(
+                self.elements_paths_dir / f"{page:0>{NUM_PAGINATION_DIGITS}}.csv", index=False
             )
 
     def _add_element(self, element: Element) -> None:
-        self._add_item(self.elements_json, asdict(element))
+        if self.num_elements_in_current_file >= ITEMS_PER_FILE:
+            self.current_elements_file = (
+                self.current_elements_file.parent
+                / f"{int(self.current_elements_file.stem) + 1:0>{NUM_PAGINATION_DIGITS}}.csv"
+            )
+            with self.current_elements_file.open("w", encoding="UTF-8") as f:
+                f.write("text,emoji,discovered\n")
+
+            self.num_elements_in_current_file = 0
+
+        self._add_item(self.current_elements_file, (element.text, element.emoji, str(element.discovered)))
+        self.num_elements_in_current_file += 1
 
     def _add_recipe(self, ingredients: frozenset[str], result: str) -> None:
+        if self.num_recipes_in_current_file >= ITEMS_PER_FILE:
+            self.current_recipes_file = (
+                self.current_recipes_file.parent
+                / f"{int(self.current_recipes_file.stem) + 1:0>{NUM_PAGINATION_DIGITS}}.csv"
+            )
+            with self.current_recipes_file.open("w", encoding="UTF-8") as f:
+                f.write("first,second,result\n")
+
+            self.num_recipes_in_current_file = 0
+
         match len(ingredients):
             case 1:
                 (first,) = (second,) = ingredients
@@ -132,7 +177,8 @@ class PaginatedCsvRepository(FileRepository):
             case _:
                 raise ValueError("Ingredients needs to have 1 or 2 elements!")
 
-        self._add_item(self.recipes_json, (first, second, result))
+        self._add_item(self.current_recipes_file, (first, second, result))
+        self.num_recipes_in_current_file += 1
 
     def _add_item(self, csv_file: Path, item: Iterable[str]) -> None:
         with csv_file.open("a", encoding="UTF-8") as f:

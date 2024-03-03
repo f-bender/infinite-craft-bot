@@ -112,7 +112,7 @@ class JsonRepository(FileRepository):
     def load_elements_paths(self) -> dict[str, ElementPath]:
         with self.elements_paths_json.open("r", encoding="UTF-8") as f:
             return {
-                element: ElementPath(ancestors=props["anc"], path=props["path"])
+                element: ElementPath(ancestors=props["anc"], path=set(props["path"]))
                 for element, props in json.load(f).items()
             }
 

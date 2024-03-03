@@ -41,6 +41,10 @@ def configure_logging(subcommand: str, log_dir: Path = PROJECT_ROOT / "logs") ->
     logging.getLogger().addHandler(console_handler)
 
     logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib.pyplot").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib.ticker").setLevel(logging.WARNING)
+    logging.getLogger("PIL.PngImagePlugin").setLevel(logging.WARNING)
 
 
 class LogElapsedTime:
