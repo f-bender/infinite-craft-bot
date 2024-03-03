@@ -53,4 +53,14 @@ def collect_some_stats(elements_paths: dict[str, ElementPath], depth_counts: Cou
     most_common_depth, num_elements = depth_counts.most_common()[0]
     stats_str += f"Most elements at depth {most_common_depth} ({num_elements} elements)"
 
+    stats_str += "\n\n"
+
+    stats_str += "Number of elements per depth:\n"
+    num_elements_cumulative = 0
+    for depth, num_elements in sorted(depth_counts.items()):
+        num_elements_cumulative += num_elements
+        stats_str += (
+            f"{depth:>{len(str(highest_depth))}}: {num_elements:>6} (cumulative {num_elements_cumulative:>7})\n"
+        )
+
     return stats_str
