@@ -2,6 +2,7 @@ import argparse
 import logging
 
 from rich import print
+from infinite_craft_bot.crawler.exhaustive_by_depth import ExhaustiveCrawler
 
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
 from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
@@ -33,6 +34,10 @@ def main() -> None:
                     crawler = ProbibalisticCrawler(
                         sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=PaginatedCsvRepository(write_access=True)
                     )
+                    crawler.crawl_multithreaded(num_threads=5)
+                case "exhaust":
+                    logger.info("Crawling in exhaustive by depth mode...")
+                    crawler = ExhaustiveCrawler(repository=PaginatedCsvRepository(write_access=True))
                     crawler.crawl_multithreaded(num_threads=5)
                 case _:
                     raise ValueError(f"Unknown crawl mode: `{args.crawl_mode}")
@@ -84,7 +89,7 @@ def parse_args() -> argparse.Namespace:
             "Only has an effect if `--compute_paths` is set."
         ),
     )
-    parser.add_argument("--crawl_mode", "-m", type=str, choices=["low"], default="low")  # to be extended
+    parser.add_argument("--crawl_mode", "-m", type=str, choices=["low", "exhaust"], default="low")  # to be extended
 
     return parser.parse_args()
 

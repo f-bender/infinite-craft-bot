@@ -111,3 +111,12 @@ class FileRepository(ABC):
 
         with file_path.open("wb" if isinstance(content, BytesIO) else "w") as f:
             f.write(content.getvalue())
+
+    def load_arbitrary_data_from_file(self, filename: str, subdirs: Optional[Iterable[str]] = None) -> str:
+        """Raises an error if the file doesn't exist."""
+        file_path = self.data_dir
+        for subdir in subdirs or []:
+            file_path = file_path / subdir
+        file_path = file_path / filename
+
+        return file_path.open("r").read()

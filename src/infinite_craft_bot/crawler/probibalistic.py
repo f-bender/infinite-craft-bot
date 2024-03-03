@@ -193,12 +193,16 @@ class ProbibalisticCrawler:
     # TODO move to ui class
     @staticmethod
     def print_finding(
-        new_element: Element, depth: int, first: str, second: str, previous_depth: Optional[int] = None
+        new_element: Element, first: str, second: str, depth: Optional[int], previous_depth: Optional[int] = None
     ) -> None:
         """Unified format of printing new elements (green if new discovery else white) and shorter paths (yellow)."""
         color_str = "[green]" if new_element.discovered else "[yellow]" if previous_depth is not None else ""
         new_element_str = f"{new_element.emoji:>5} {new_element.text}"
-        depth_str = f"({previous_depth} -> {depth})" if previous_depth is not None else f"({depth})"
+        depth_str = (
+            f"({previous_depth} -> {depth})"
+            if previous_depth is not None
+            else f"({depth})" if depth is not None else ""
+        )
         ingredients_str = f"({first} + {second})"
 
         print("\r", end="")
