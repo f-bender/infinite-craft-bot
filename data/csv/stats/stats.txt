@@ -1,22 +1,149 @@
-Count: 75837
- Mean: 14.2921
-  Std: 6.84728
+Count: 76694
+ Mean: 14.1988
+  Std: 6.75835
   Min: 0
   25%: 12
   50%: 14
   75%: 15
-  Max: 176
+  Max: 178
 
 Deepest elements:
-129: Chicken Nebula
-130: Pancake Weiwei
-130: Leaker
+125: Icecream Shark
+126: Pancake Weiwei
+131: Pancake Man
 133: Elmocon Sharkanoo
-135: Rocking Gyrotron
-137: Pancake Man
-140: Crocodile Trump
-152: Crocodracosharktopus
-157: Piggy Werewolf
-176: Trump Sushi
+134: Rocking Gyrotron
+137: Leaker
+148: Crocodile Trump
+156: Piggy Werewolf
+158: Crocodracosharktopus
+178: Trump Sushi
 
-Most elements at depth 14 (11332 elements)
+Most elements at depth 14 (11264 elements)
+
+Number of elements per depth:
+  0:      4 (cumulative       4)
+  1:     10 (cumulative      14)
+  2:     19 (cumulative      33)
+  3:     50 (cumulative      83)
+  4:    122 (cumulative     205)
+  5:    244 (cumulative     449)
+  6:    494 (cumulative     943)
+  7:   1036 (cumulative    1979)
+  8:   1821 (cumulative    3800)
+  9:   2964 (cumulative    6764)
+ 10:   4410 (cumulative   11174)
+ 11:   6437 (cumulative   17611)
+ 12:   8665 (cumulative   26276)
+ 13:  10433 (cumulative   36709)
+ 14:  11264 (cumulative   47973)
+ 15:  10712 (cumulative   58685)
+ 16:   8106 (cumulative   66791)
+ 17:   4682 (cumulative   71473)
+ 18:   2009 (cumulative   73482)
+ 19:    586 (cumulative   74068)
+ 20:    217 (cumulative   74285)
+ 21:    119 (cumulative   74404)
+ 22:    114 (cumulative   74518)
+ 23:     99 (cumulative   74617)
+ 24:     81 (cumulative   74698)
+ 25:    105 (cumulative   74803)
+ 26:     82 (cumulative   74885)
+ 27:     80 (cumulative   74965)
+ 28:     64 (cumulative   75029)
+ 29:     66 (cumulative   75095)
+ 30:     66 (cumulative   75161)
+ 31:     65 (cumulative   75226)
+ 32:     63 (cumulative   75289)
+ 33:     76 (cumulative   75365)
+ 34:     43 (cumulative   75408)
+ 35:     50 (cumulative   75458)
+ 36:     54 (cumulative   75512)
+ 37:     52 (cumulative   75564)
+ 38:     36 (cumulative   75600)
+ 39:     37 (cumulative   75637)
+ 40:     44 (cumulative   75681)
+ 41:     54 (cumulative   75735)
+ 42:     35 (cumulative   75770)
+ 43:     26 (cumulative   75796)
+ 44:     44 (cumulative   75840)
+ 45:     35 (cumulative   75875)
+ 46:     33 (cumulative   75908)
+ 47:     38 (cumulative   75946)
+ 48:     38 (cumulative   75984)
+ 49:     32 (cumulative   76016)
+ 50:     33 (cumulative   76049)
+ 51:     27 (cumulative   76076)
+ 52:     22 (cumulative   76098)
+ 53:     23 (cumulative   76121)
+ 54:     28 (cumulative   76149)
+ 55:     25 (cumulative   76174)
+ 56:     20 (cumulative   76194)
+ 57:     31 (cumulative   76225)
+ 58:     13 (cumulative   76238)
+ 59:     18 (cumulative   76256)
+ 60:     31 (cumulative   76287)
+ 61:     27 (cumulative   76314)
+ 62:     17 (cumulative   76331)
+ 63:     14 (cumulative   76345)
+ 64:     13 (cumulative   76358)
+ 65:     24 (cumulative   76382)
+ 66:     15 (cumulative   76397)
+ 67:     14 (cumulative   76411)
+ 68:     18 (cumulative   76429)
+ 69:     14 (cumulative   76443)
+ 70:     16 (cumulative   76459)
+ 71:     10 (cumulative   76469)
+ 72:     12 (cumulative   76481)
+ 73:     15 (cumulative   76496)
+ 74:      8 (cumulative   76504)
+ 75:     14 (cumulative   76518)
+ 76:     10 (cumulative   76528)
+ 77:      5 (cumulative   76533)
+ 78:      6 (cumulative   76539)
+ 79:      7 (cumulative   76546)
+ 80:      6 (cumulative   76552)
+ 81:      8 (cumulative   76560)
+ 82:      8 (cumulative   76568)
+ 83:     12 (cumulative   76580)
+ 84:      4 (cumulative   76584)
+ 85:      8 (cumulative   76592)
+ 86:      4 (cumulative   76596)
+ 87:      5 (cumulative   76601)
+ 88:      7 (cumulative   76608)
+ 89:      6 (cumulative   76614)
+ 90:      3 (cumulative   76617)
+ 91:      8 (cumulative   76625)
+ 92:      4 (cumulative   76629)
+ 93:      4 (cumulative   76633)
+ 94:      4 (cumulative   76637)
+ 95:      1 (cumulative   76638)
+ 96:      3 (cumulative   76641)
+ 97:      3 (cumulative   76644)
+ 98:      2 (cumulative   76646)
+ 99:      6 (cumulative   76652)
+100:      2 (cumulative   76654)
+101:      3 (cumulative   76657)
+102:      3 (cumulative   76660)
+103:      2 (cumulative   76662)
+104:      2 (cumulative   76664)
+105:      1 (cumulative   76665)
+106:      5 (cumulative   76670)
+110:      1 (cumulative   76671)
+111:      1 (cumulative   76672)
+112:      1 (cumulative   76673)
+114:      4 (cumulative   76677)
+118:      3 (cumulative   76680)
+119:      1 (cumulative   76681)
+120:      1 (cumulative   76682)
+123:      1 (cumulative   76683)
+125:      2 (cumulative   76685)
+126:      1 (cumulative   76686)
+131:      1 (cumulative   76687)
+133:      1 (cumulative   76688)
+134:      1 (cumulative   76689)
+137:      1 (cumulative   76690)
+148:      1 (cumulative   76691)
+156:      1 (cumulative   76692)
+158:      1 (cumulative   76693)
+178:      1 (cumulative   76694)
