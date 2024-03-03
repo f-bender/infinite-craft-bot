@@ -2,13 +2,13 @@ import argparse
 import logging
 
 from rich import print
-from infinite_craft_bot.crawler.exhaustive_by_depth import ExhaustiveCrawler
 
+from infinite_craft_bot.crawler.exhaustive_by_depth import ExhaustiveCrawler
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
 from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
 from infinite_craft_bot.logging_helpers import configure_logging
 from infinite_craft_bot.persistence.csv_file import PaginatedCsvRepository
-from infinite_craft_bot.query_full_recipe import FullRecipeQuery, print_full_recipe
+from infinite_craft_bot.query_full_recipe import FullRecipeQuery, print_full_recipes
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,8 @@ def main() -> None:
                 case "low":
                     logger.info("Crawling in low-depth mode...")
                     crawler = ProbibalisticCrawler(
-                        sampling_strategy=SamplingStrategy.LOW_DEPTH, repository=PaginatedCsvRepository(write_access=True)
+                        sampling_strategy=SamplingStrategy.LOW_DEPTH,
+                        repository=PaginatedCsvRepository(write_access=True),
                     )
                     crawler.crawl_multithreaded(num_threads=5)
                 case "exhaust":
@@ -45,10 +46,6 @@ def main() -> None:
             pass
         case _:
             raise ValueError(f"Unknown subcommand: '{args.subcommand}'")
-
-    # TODO commandline arg parsing, mode choosing, delegating to the right crawler etc.
-
-    # TODO also a mode for computing paths (and generating stas) -> even implementation left todo!
 
     # note that all the (pretty) printing should go here (e.g. print_findings)
     # (if it's getting much, perhaps make this a directory with multiple files for better organiaztion
@@ -105,7 +102,4 @@ def query_full_recipes_continuously() -> None:
             return
         print()
 
-        if (operations := query.query_full_recipe(element)) is not None:
-            print_full_recipe(operations)
-        else:
-            print("Unknown element!")
+        print_full_recipes(query.query_full_recipe(element))

@@ -15,6 +15,9 @@ from infinite_craft_bot.persistence.common import ElementPath, FileRepository
 # * It just looks like iterating like this, until no more changes occur, doesn't guarantee the optimal depth to be found.
 # * (Which I didn't expect)
 
+# * one thing to try and see what happens: shuffle recipes_as_tuples after every iteration, then only consider it
+# * finished after no modifications in e.g. 3 subsequent iterations (differently shuffled of course)
+
 logger = logging.getLogger(__name__)
 
 
