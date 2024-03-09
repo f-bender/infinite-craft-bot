@@ -10,6 +10,7 @@ from infinite_craft_bot.persistence.common import Element
 
 logger = logging.getLogger(__name__)
 
+#! Note: this seems to not be 100% thread-safe; I have encountered the same element being added twice
 
 class ExhaustiveCrawler(Crawler):
     def init_locks(self) -> None:
@@ -89,7 +90,7 @@ class ExhaustiveCrawler(Crawler):
         
         if not updated:
             return
-        
+
         depth = len(self.elements_to_path[self.sorted_elements[self.next_craft_combination[0]]])
 
         logger.debug(f"next_craft_combination updated to {self.next_craft_combination} (depth {depth})")
