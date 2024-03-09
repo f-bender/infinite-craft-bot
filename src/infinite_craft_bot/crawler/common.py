@@ -82,12 +82,11 @@ class Crawler(ABC):
             with LogElapsedTime(log_func=logger.debug, label="Sampling"):
                 first, second = self.sample_elements()
 
-            result_element: Optional[Element] = craft_items(first, second)
+            result_element: Optional[Element] = None
+            while result_element is None:
+                result_element = craft_items(first, second)
 
             with LogElapsedTime(log_func=logger.debug, label="Iteration"):
-                if not result_element:
-                    continue
-
                 self.after_successful_request()
 
                 recipe = frozenset((first, second))

@@ -28,6 +28,9 @@ class SamplingStrategy(Enum):
     HIGH_DEPTH = auto()
 
 
+# TODO Split this into 3 separate crawlers (subclasses of Crawler), which have sampling functions defined as a method
+
+
 class ProbibalisticCrawler:
 
     # TODO: maybe implement an abstract crawler class, that basically already has a template crawling loop, but provides

@@ -50,7 +50,6 @@ class ExhaustiveCrawler(Crawler):
         # in the dict with value False: committed to (by one of the threads), but result not yet available
         # in the dict with value True: fully explored
         self.recipes: dict[frozenset[str], bool] = {ingredients: True for ingredients in self.repository.load_recipes()}  # type: ignore
-        self.current_recipe_by_thread: dict[int, tuple[str, str]] = {}
 
         # every combination of elements beneath this index tuple has been explored (indices into sorted elements array)
         self.next_craft_combination: tuple[int, int] = 0, 0
@@ -102,15 +101,6 @@ class ExhaustiveCrawler(Crawler):
         )
 
     def sample_elements(self) -> tuple[str, str]:
-        thread_id = threading.get_ident()
-        if (
-            threading.get_ident() in self.current_recipe_by_thread
-            and self.recipes.get(frozenset(self.current_recipe_by_thread[thread_id])) is False
-        ):
-            # we had previously committed to a recipe, but have not yet completed it: try this one again!
-            # this might happen if the crafting fails for some reason (e.g. server error or connection issues)
-            return self.current_recipe_by_thread[thread_id]
-
         with (
             self.next_craft_combination_lock or nullcontext(),
             self.sorted_elements_lock or nullcontext(),
@@ -128,7 +118,7 @@ class ExhaustiveCrawler(Crawler):
 
                 current_index_to_try = self.increment_dual_index_tuple(current_index_to_try)
 
-        self.current_recipe_by_thread[thread_id] = first, second
+        logger.debug(f"{first} + {second}")
         return first, second
 
     @staticmethod
