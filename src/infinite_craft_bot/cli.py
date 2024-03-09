@@ -5,6 +5,7 @@ from rich import print
 
 from infinite_craft_bot.crawler.exhaustive_by_depth import ExhaustiveCrawler
 from infinite_craft_bot.crawler.probibalistic import ProbibalisticCrawler, SamplingStrategy
+from infinite_craft_bot.crawler.targeted import TargetedCrawler
 from infinite_craft_bot.element_paths.compute_paths import compute_and_save_elements_paths
 from infinite_craft_bot.logging_helpers import configure_logging
 from infinite_craft_bot.persistence.csv_file import PaginatedCsvRepository
@@ -38,6 +39,22 @@ def main() -> None:
                     crawler.crawl_multithreaded(num_threads=5)
                 case "exhaust":
                     logger.info("Crawling in exhaustive by depth mode...")
+                    crawler = ExhaustiveCrawler(repository=PaginatedCsvRepository(write_access=True))
+                    crawler.crawl_multithreaded(num_threads=5)
+                case "target":
+                    if args.target_element is None:
+                        raise ValueError("Need to specify a target element in targetted mode!")
+                    logger.info(f"Crawling in targetted mode: trying to find '{args.target_element}'...")
+                    crawler = TargetedCrawler(
+                        repository=PaginatedCsvRepository(write_access=True), target_element=args.target_element
+                    )
+                    crawler.crawl_multithreaded(num_threads=5)
+
+                    logger.warning(
+                        f"\n\n\n########## The target element '{args.target_element}' was found! ##########\n\n\n"
+                        "Continuing in exhausive mode..."
+                    )
+
                     crawler = ExhaustiveCrawler(repository=PaginatedCsvRepository(write_access=True))
                     crawler.crawl_multithreaded(num_threads=5)
                 case _:
@@ -86,7 +103,8 @@ def parse_args() -> argparse.Namespace:
             "Only has an effect if `--compute_paths` is set."
         ),
     )
-    parser.add_argument("--crawl_mode", "-m", type=str, choices=["low", "exhaust"], default="low")  # to be extended
+    parser.add_argument("--crawl_mode", "-m", type=str, choices=["low", "exhaust", "target"], default="low")
+    parser.add_argument("--target_element", "-t", type=str, default=None)
 
     return parser.parse_args()
 

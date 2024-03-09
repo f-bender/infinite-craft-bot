@@ -14,10 +14,22 @@ matplotlib = "^3.8.3"
 numpy = "^1.26.4"
 pandas = "^2.2.0"
 ratelimit = "^2.2.1"
+torch = {version = "^2.2.1+cu118", source = "pytorch-gpu-src"}
+torchvision = {version = "^0.17.1+cu118", source = "pytorch-gpu-src"}
+torchaudio = {version = "^2.2.1+cu118", source = "pytorch-gpu-src"}
+transformers = "^4.38.2"
+scipy = "^1.12.0"
+more-itertools = "^10.2.0"
 
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.1"
+
+
+[[tool.poetry.source]]
+name = "pytorch-gpu-src"
+url = "https://download.pytorch.org/whl/cu118"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core"]

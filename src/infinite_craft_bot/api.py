@@ -30,6 +30,9 @@ HEADERS = {
 class ApiChanged(Exception):
     pass
 
+class ServerError(Exception):
+    pass
+
 
 # TODO observe how well `ratelimit` works (alternative: https://github.com/vutran1710/PyrateLimiter)
 @sleep_and_retry
@@ -42,7 +45,7 @@ def craft_items(first: str, second: str, session: Optional[requests.Session] = N
     try:
         response = get(URL_TEMPLATE.format(first=first, second=second), headers=HEADERS, timeout=10)
     except Exception as e:
-        logger.warning(f"Crafting failed: {e}")
+        logger.warning(f"Crafting of '{first}' + '{second}' failed: {e}")
         return None
 
     request_duration = time.perf_counter() - before_request
@@ -59,5 +62,9 @@ def craft_items(first: str, second: str, session: Optional[requests.Session] = N
 
     # TODO in case of a 429 "Too Many Requests" error, the response header contains the number of seconds until we're
     # allowed to make reqeusts again. Read this, and sleep for that time!
-    logger.warning(f"Crafting failed: {response.status_code} {response.reason}")
+    logger.warning(f"Crafting of '{first}' + '{second}' failed: {response.status_code} {response.reason}")
+
+    if response.status_code == 500 and response.reason == "Internal Server Error":
+        raise ServerError()
+
     return None

@@ -7,7 +7,7 @@ from typing import NoReturn, Optional
 
 import rich
 
-from infinite_craft_bot.api import craft_items
+from infinite_craft_bot.api import ServerError, craft_items
 from infinite_craft_bot.logging_helpers import LogElapsedTime
 from infinite_craft_bot.persistence.common import Element, FileRepository, WriteAccessLocked
 
@@ -59,7 +59,7 @@ class Crawler(ABC):
         self.elements_set = set(self.elements_list)
         self.recipes = set(self.repository.load_recipes())
 
-    def crawl_multithreaded(self, num_threads: int, blocking: bool = True) -> None | NoReturn:
+    def crawl_multithreaded(self, num_threads: int, blocking: bool = True) -> None:
         if num_threads <= 1:
             raise ValueError("`num_threads` must be at least 2! To crawl single-threadedly, call `crawl()` directly.")
 
@@ -76,15 +76,25 @@ class Crawler(ABC):
 
         return None
 
-    def crawl(self) -> NoReturn:
+    def crawl(self) -> None:
         logger.debug("Starting to crawl...")
         while True:
             with LogElapsedTime(log_func=logger.debug, label="Sampling"):
                 first, second = self.sample_elements()
 
+            tries = 0
             result_element: Optional[Element] = None
             while result_element is None:
-                result_element = craft_items(first, second)
+                try:
+                    result_element = craft_items(first, second)
+                except ServerError:
+                    tries += 1
+                    if tries > 3:
+                        logger.critical(f"Seems like '{first}' and '{second}' cannot be combined - moving on!")
+                        break
+
+            if result_element is None:
+                continue
 
             with LogElapsedTime(log_func=logger.debug, label="Iteration"):
                 self.after_successful_request()
@@ -104,6 +114,12 @@ class Crawler(ABC):
                     continue
 
                 self.process_new_element(result_element, first=first, second=second)
+
+                if self.exit_condition():
+                    return
+
+    def exit_condition(self) -> bool:
+        return False
 
     @abstractmethod
     def sample_elements(self) -> tuple[str, str]:
@@ -145,7 +161,7 @@ class Crawler(ABC):
     # TODO move to ui class
     @staticmethod
     def print_finding(
-        new_element: Element, first: str, second: str, depth: Optional[int], previous_depth: Optional[int] = None
+        new_element: Element, first: str, second: str, depth: Optional[int] = None, previous_depth: Optional[int] = None
     ) -> None:
         """Unified format of printing new elements (green if new discovery else white) and shorter paths (yellow)."""
         color_str = "[green]" if new_element.discovered else "[yellow]" if previous_depth is not None else ""

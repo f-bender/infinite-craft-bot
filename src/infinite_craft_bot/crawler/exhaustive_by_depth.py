@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 #! Note: this seems to not be 100% thread-safe; I have encountered the same element being added twice
 
+
 class ExhaustiveCrawler(Crawler):
     def init_locks(self) -> None:
         """Initialization of locks executed in __init__()."""
@@ -49,7 +50,9 @@ class ExhaustiveCrawler(Crawler):
         # not in the dict: un-explored
         # in the dict with value False: committed to (by one of the threads), but result not yet available
         # in the dict with value True: fully explored
-        self.recipes: dict[frozenset[str], bool] = {ingredients: True for ingredients in self.repository.load_recipes()}  # type: ignore
+        self.recipes: dict[frozenset[str], bool] = {  # type: ignore
+            ingredients: True for ingredients in self.repository.load_recipes()
+        }
 
         # every combination of elements beneath this index tuple has been explored (indices into sorted elements array)
         self.next_craft_combination: tuple[int, int] = 0, 0
@@ -86,7 +89,7 @@ class ExhaustiveCrawler(Crawler):
         while self.recipes.get(frozenset(self.sorted_elements[x] for x in self.next_craft_combination)) is True:
             updated = True
             self.next_craft_combination = self.increment_dual_index_tuple(self.next_craft_combination)
-        
+
         if not updated:
             return
 
