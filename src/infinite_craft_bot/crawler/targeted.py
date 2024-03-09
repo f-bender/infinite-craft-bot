@@ -7,12 +7,14 @@ from typing import Optional
 import numpy as np
 
 from infinite_craft_bot.crawler.common import Crawler
+from infinite_craft_bot.globals import PROJECT_ROOT
 from infinite_craft_bot.persistence.common import Element, FileRepository
 from infinite_craft_bot.text_similarity import TextSimilarityCalculator
 
 logger = logging.getLogger(__name__)
 
 # TODO: store embeddings, to avoid having to compute all of them every time!
+CACHED_EMBEDDINGS_FILE = PROJECT_ROOT / "data" / "_cached_element_embeddings.npz"
 
 
 class TargetedCrawler(Crawler):
@@ -49,20 +51,45 @@ class TargetedCrawler(Crawler):
         """Initialization of in-memory data this class keeps track of, executed in __init__()."""
         self.sorted_elements = [element.text for element in self.repository.load_elements()]
 
-        logger.debug("Computing text embeddings...")
-        element_embeddings = self.text_similarity_calculator.compute_embeddings(self.sorted_elements)
-        logger.debug("Done!")
+        elements_to_embeddings =  self.get_element_embeddings()
 
         logger.debug("Computing similarities to target...")
         self.elements_to_target_similarity = {
             element: self.text_similarity_calculator.similarity(self.target_element_embedding, element_embedding)
-            for element, element_embedding in zip(self.sorted_elements, element_embeddings)
+            for element, element_embedding in elements_to_embeddings.items()
         }
         logger.debug("Done!")
 
         self.sorted_elements.sort(key=lambda el: -self.elements_to_target_similarity[el])
 
         self.recipes = set(self.repository.load_recipes())
+
+    def get_element_embeddings(self) -> dict[str, np.ndarray]:
+        elements_to_embeddings: dict[str, np.ndarray] = {}
+        if CACHED_EMBEDDINGS_FILE.is_file():
+            logger.debug("Loading cached embeddings...")
+            data = np.load(CACHED_EMBEDDINGS_FILE, allow_pickle=True)
+            logger.debug("Done!")
+            elements_to_embeddings.update(dict(zip(data["texts"], data["embeddings"])))
+
+        non_cached_elements = [el for el in self.sorted_elements if el not in elements_to_embeddings]
+
+        if non_cached_elements:
+            logger.debug("Computing remaining embeddings...")
+            element_embeddings = self.text_similarity_calculator.compute_embeddings(non_cached_elements)
+            logger.debug("Done!")
+
+            elements_to_embeddings.update(dict(zip(non_cached_elements, element_embeddings)))
+
+            logger.debug("Saving embeddings to cache file...")
+            np.savez(
+                CACHED_EMBEDDINGS_FILE,
+                texts=list(elements_to_embeddings.keys()),
+                embeddings=list(elements_to_embeddings.values()),
+            )
+            logger.debug("Done!")
+
+        return elements_to_embeddings
 
     def target_similarity(self, element: str) -> float:
         element_embedding = self.text_similarity_calculator.compute_embeddings([element])[0]
