@@ -51,7 +51,7 @@ class TargetedCrawler(Crawler):
         """Initialization of in-memory data this class keeps track of, executed in __init__()."""
         self.sorted_elements = [element.text for element in self.repository.load_elements()]
 
-        elements_to_embeddings =  self.get_element_embeddings()
+        elements_to_embeddings = self.get_element_embeddings()
 
         logger.debug("Computing similarities to target...")
         self.elements_to_target_similarity = {
@@ -114,7 +114,7 @@ class TargetedCrawler(Crawler):
             logger.debug(
                 f"{num_elements} -> {(i, j)}, sims "
                 f"({self.elements_to_target_similarity[first]:.3g}, {self.elements_to_target_similarity[second]:.3g}) "
-                f"({(first, second)})"
+                f"({first}, {second})"
             )
             return first, second
 
@@ -140,4 +140,7 @@ class TargetedCrawler(Crawler):
         # TODO/
 
     def exit_condition(self) -> bool:
-        return self.target_element in self.elements_to_target_similarity
+        # NOTE: by "not caring" if we have found our target, we can re-frame this as a crawler which finds elements
+        # related to a certain concept
+        return False
+        # return self.target_element in self.elements_to_target_similarity

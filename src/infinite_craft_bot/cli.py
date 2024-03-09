@@ -49,14 +49,6 @@ def main() -> None:
                         repository=PaginatedCsvRepository(write_access=True), target_element=args.target_element
                     )
                     crawler.crawl_multithreaded(num_threads=5)
-
-                    logger.warning(
-                        f"\n\n\n########## The target element '{args.target_element}' was found! ##########\n\n\n"
-                        "Continuing in exhausive mode..."
-                    )
-
-                    crawler = ExhaustiveCrawler(repository=PaginatedCsvRepository(write_access=True))
-                    crawler.crawl_multithreaded(num_threads=5)
                 case _:
                     raise ValueError(f"Unknown crawl mode: `{args.crawl_mode}")
         case "compute_paths":
