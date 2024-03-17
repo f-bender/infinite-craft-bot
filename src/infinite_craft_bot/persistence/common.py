@@ -95,7 +95,11 @@ class FileRepository(ABC):
     def _add_recipe(self, ingredients: frozenset[str], result: str) -> None: ...
 
     def save_arbitrary_data_to_file(
-        self, content: BytesIO | StringIO, filename: str, subdirs: Optional[Iterable[str]] = None
+        self,
+        content: BytesIO | StringIO,
+        filename: str,
+        subdirs: Optional[Iterable[str]] = None,
+        encoding: Optional[str] = None,
     ) -> None:
         # NOTE we don't require write access here because this is a single operation that overwrites the entire file,
         # i.e. there is basically no risk of multiple threads/processes stepping on each other's feet
@@ -109,14 +113,16 @@ class FileRepository(ABC):
 
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with file_path.open("wb" if isinstance(content, BytesIO) else "w") as f:
+        with file_path.open("wb" if isinstance(content, BytesIO) else "w", encoding=encoding) as f:
             f.write(content.getvalue())
 
-    def load_arbitrary_data_from_file(self, filename: str, subdirs: Optional[Iterable[str]] = None) -> str:
+    def load_arbitrary_data_from_file(
+        self, filename: str, subdirs: Optional[Iterable[str]] = None, encoding: Optional[str] = None
+    ) -> str:
         """Raises an error if the file doesn't exist."""
         file_path = self.data_dir
         for subdir in subdirs or []:
             file_path = file_path / subdir
         file_path = file_path / filename
 
-        return file_path.open("r").read()
+        return file_path.open("r", encoding=encoding).read()

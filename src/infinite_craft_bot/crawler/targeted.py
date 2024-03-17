@@ -1,7 +1,10 @@
 import bisect
+from io import StringIO
 import logging
+import re
 import threading
 from contextlib import nullcontext
+import time
 from typing import Optional
 
 import numpy as np
@@ -17,9 +20,25 @@ logger = logging.getLogger(__name__)
 CACHED_EMBEDDINGS_FILE = PROJECT_ROOT / "data" / "_cached_element_embeddings.npz"
 
 
+def make_valid_directory_name(name):
+    # Define the pattern for invalid characters
+    invalid_chars = re.compile(r'[<>:"/\\|?*\x00-\x1F]')  # Including control characters
+
+    # Replace invalid characters with underscores
+    valid_name = re.sub(invalid_chars, "_", name)
+
+    # Remove leading and trailing whitespaces and dots
+    valid_name = valid_name.strip(". ").rstrip()
+
+    # Limit length of name to 255 characters (Windows limit)
+    valid_name = valid_name[:255]
+
+    return valid_name
+
+
 class TargetedCrawler(Crawler):
     def __init__(
-        self, repository: FileRepository, target_element: str, higher_similarity_prioritization_factor: float = 100
+        self, repository: FileRepository, target_element: str, higher_similarity_prioritization_factor: float = 500
     ) -> None:
         self.text_similarity_calculator = TextSimilarityCalculator()
         self.target_element = target_element
@@ -36,7 +55,8 @@ class TargetedCrawler(Crawler):
         self.elements_to_target_similarity_lock: Optional[threading.Lock] = None
         self.elements_repository_lock: Optional[threading.Lock] = None
         self.recipes_repository_lock: Optional[threading.Lock] = None
-        self.sorted_elements_lock: Optional[threading.Lock] = None
+        self.forbidden_pattern_lock = threading.Lock()
+        self.sorted_elements_lock = threading.Lock()
         self.recipes_lock: Optional[threading.Lock] = None
 
     def create_locks(self) -> None:
@@ -46,6 +66,64 @@ class TargetedCrawler(Crawler):
         self.recipes_repository_lock = threading.Lock()
         self.sorted_elements_lock = threading.Lock()
         self.recipes_lock = threading.Lock()
+
+    def _sort_key(self, element_name: str) -> float:
+        penalty = 0
+        if self.forbidden_pattern is not None and (
+            bool(self.forbidden_pattern.search(element_name.lower())) ^ bool(self.whitelist)
+        ):
+            penalty = 100
+
+        # negate in order to sort from highest to lowest (bisect.insort doesn't provide "revsere" argument)
+        return -(self.elements_to_target_similarity[element_name] - 0.01 * len(element_name) - penalty)
+
+    def load_forbidden_pattern(self) -> tuple[Optional[re.Pattern], Optional[bool]]:
+        try:
+            forbidden_patterns = self.repository.load_arbitrary_data_from_file(
+                subdirs=["targeted", make_valid_directory_name(self.target_element)],
+                filename="forbidden_patterns.txt",
+                encoding="utf-8",
+            )
+        except FileNotFoundError:
+            # create the file without any contents, to make it easy for the user to start adding to it
+            self.repository.save_arbitrary_data_to_file(
+                content=StringIO(""),
+                subdirs=["targeted", make_valid_directory_name(self.target_element)],
+                filename="forbidden_patterns.txt",
+                encoding="utf-8",
+            )
+            return None, None
+
+        # TODO: a more fine-grained system (probably using json or so), where you can specify "boost"-regexes and
+        # TODO  "penalty"-regexes. For each boost regex an element matches with, it gets scored higher. For each
+        # TODO  penalty-regex-match, it gets scored lower.
+
+        # TODO: maybe in the future even such fine-grained control that first and second element of the combination have
+        # TODO  different filters/regexes (e.g. such that I can try to specifically combine video-related elements with
+        # TODO  game-related elements, to try and get Video Game)
+
+        # TODO: maybe, instead of a config file, have the "config" be an actual pyhton code file where basically
+        # TODO  there is a function which computes the "fitness value" of a given element, and this python code file
+        # TODO  is read and passed into "eval", i.e. "compiled" into an actual function which is then used to sort
+        # TODO  the elements list (in case of a syntax error or so, do nothing; do as if nothing had changed)
+        # TODO  -> then later have this compute 2 separate fitness values for first and second
+        #! -> could make use of importlib.reload instead of using eval:
+        #! https://chat.openai.com/share/5d5ae8c6-73b7-4963-a6dd-ef9d1beae74b
+
+        forbidden_patterns = forbidden_patterns.strip()
+        if not forbidden_patterns:
+            return None, None
+
+        whitelist = False
+        patterns = forbidden_patterns.split("\n")
+        if patterns[0] == "WHITELIST":
+            whitelist = True
+            patterns = patterns[1:]
+
+        if not patterns:
+            return None, None
+
+        return re.compile("|".join(patterns)), whitelist
 
     def init_data(self) -> None:
         """Initialization of in-memory data this class keeps track of, executed in __init__()."""
@@ -60,7 +138,14 @@ class TargetedCrawler(Crawler):
         }
         logger.debug("Done!")
 
-        self.sorted_elements.sort(key=lambda el: -self.elements_to_target_similarity[el])
+        self.forbidden_pattern, self.whitelist = self.load_forbidden_pattern()
+        logger.info(f"Forbidden pattern: {self.forbidden_pattern}")
+
+        self.sorted_elements.sort(key=self._sort_key)
+        logger.info(
+            f"Already known elements most similar to '{self.target_element}':\n"
+            + "\n".join(f"{i:>2}: {el}" for i, el in enumerate(self.sorted_elements[:100]))
+        )
 
         self.recipes = set(self.repository.load_recipes())
 
@@ -95,16 +180,29 @@ class TargetedCrawler(Crawler):
         element_embedding = self.text_similarity_calculator.compute_embeddings([element])[0]
         return self.text_similarity_calculator.similarity(self.target_element_embedding, element_embedding)
 
+    def periodically_update_forbidden_substrings(self) -> None:
+        while True:
+            time.sleep(10)
+            new_forbidden_pattern, new_whitelist = self.load_forbidden_pattern()
+            if (new_forbidden_pattern, new_whitelist) != (self.forbidden_pattern, self.whitelist):
+                logger.info(f"New forbidden pattern: {new_forbidden_pattern}")
+                with self.forbidden_pattern_lock, self.sorted_elements_lock:
+                    self.forbidden_pattern, self.whitelist = new_forbidden_pattern, new_whitelist
+                    self.sorted_elements.sort(key=self._sort_key)
+
+    def crawl_multithreaded(self, num_threads: int, blocking: bool = True) -> None:
+        threading.Thread(target=self.periodically_update_forbidden_substrings, daemon=True).start()
+        return super().crawl_multithreaded(num_threads, blocking)
+
     def sample_elements(self) -> tuple[str, str]:
         num_elements = len(self.sorted_elements)
 
-        mean = 0
-        std_deviation = len(self.sorted_elements) / self.higher_similarity_prioritization_factor
+        exp_scale = len(self.sorted_elements) / self.higher_similarity_prioritization_factor
 
         while True:
             i = j = num_elements
             while not (i < num_elements and j < num_elements):
-                i, j = np.random.normal(mean, std_deviation, size=2)
+                i, j = np.random.exponential(scale=exp_scale, size=2)
                 i, j = int(abs(i)), int(abs(j))
 
             first, second = self.sorted_elements[i], self.sorted_elements[j]
@@ -127,17 +225,22 @@ class TargetedCrawler(Crawler):
 
         # add at correct index (keeping it sorted) using bisection
         new_element_target_similarity = self.target_similarity(element.text)
-        with self.elements_to_target_similarity_lock or nullcontext(), self.sorted_elements_lock or nullcontext():
+        with (
+            self.elements_to_target_similarity_lock or nullcontext(),
+            self.forbidden_pattern_lock or nullcontext(),
+            self.sorted_elements_lock or nullcontext(),
+        ):
             self.elements_to_target_similarity[element.text] = new_element_target_similarity
-            bisect.insort(
-                self.sorted_elements,
-                element.text,
-                key=lambda el: -self.elements_to_target_similarity[el],
-            )
+            bisect.insort(self.sorted_elements, element.text, key=self._sort_key)
 
         # TODO: self.ui.print_finding(new_element=result_element, depth=len(new_element_path), first=first, second=second)
         self.print_finding(new_element=element, first=first, second=second)
         # TODO/
+
+        if element.text == self.target_element:
+            print("\n" * 20)
+            print(f"######################## FOUND TARGET ELEMENT '{self.target_element}'!!! ########################")
+            print("\n" * 20)
 
     def exit_condition(self) -> bool:
         # NOTE: by "not caring" if we have found our target, we can re-frame this as a crawler which finds elements
