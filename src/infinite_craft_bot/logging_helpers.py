@@ -19,13 +19,15 @@ def configure_logging(subcommand: str, log_dir: Path = PROJECT_ROOT / "logs") ->
     )
 
     # Create TimedRotatingFileHandler for all log messages
-    rotating_handler = TimedRotatingFileHandler(log_dir / "debug.log", when="S", interval=300, backupCount=1)
+    rotating_handler = TimedRotatingFileHandler(
+        log_dir / "debug.log", when="S", interval=300, backupCount=1, encoding="utf-8"
+    )
     rotating_handler.setLevel(logging.DEBUG)
     rotating_handler.setFormatter(file_formatter)
     logging.getLogger().addHandler(rotating_handler)
 
     # Create TimedRotatingFileHandler for INFO and above
-    info_handler = TimedRotatingFileHandler(log_dir / "info.log", when="H", interval=2, backupCount=1)
+    info_handler = TimedRotatingFileHandler(log_dir / "info.log", when="H", interval=2, backupCount=1, encoding="utf-8")
     info_handler.setLevel(logging.INFO)
     info_handler.setFormatter(file_formatter)
     logging.getLogger().addHandler(info_handler)

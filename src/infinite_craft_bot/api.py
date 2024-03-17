@@ -14,7 +14,7 @@ HEADERS = {
     # directly copied from a request made when using Infinite Craft in the browser
     # (F12 -> Network tab -> click on "pair?..." request -> Headers tab -> Request Headers)
     "Accept": "*/*",
-    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Encoding": "gzip, deflate",
     "Accept-Language": "en-US,en;q=0.9,de-DE;q=0.8,de;q=0.7",
     "Referer": "https://neal.fun/infinite-craft/",
     "Sec-Ch-Ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
@@ -43,7 +43,7 @@ def craft_items(first: str, second: str, session: Optional[requests.Session] = N
     before_request = time.perf_counter()
 
     try:
-        response = get(URL_TEMPLATE.format(first=first, second=second), headers=HEADERS, timeout=10)
+        response = get(URL_TEMPLATE.format(first=first, second=second), headers=HEADERS, timeout=20)
     except Exception as e:
         logger.warning(f"Crafting of '{first}' + '{second}' failed: {e}")
         return None

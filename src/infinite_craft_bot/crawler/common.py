@@ -66,7 +66,7 @@ class Crawler(ABC):
         self.create_locks()
 
         for _ in range(num_threads - int(blocking)):
-            threading.Thread(target=self.crawl, daemon=True).start()
+            threading.Thread(target=self.crawl_and_log_error, daemon=True).start()
 
         if blocking:
             try:
@@ -75,6 +75,14 @@ class Crawler(ABC):
                 sys.exit(0)
 
         return None
+
+    def crawl_and_log_error(self) -> None:
+        try:
+            self.crawl()
+        except Exception as e:
+            logger.critical(f"Encountered unrecoverable exception:\n{e}")
+        else:
+            logger.warning("Exiting crawl due to exit condition!")
 
     def crawl(self) -> None:
         logger.debug("Starting to crawl...")

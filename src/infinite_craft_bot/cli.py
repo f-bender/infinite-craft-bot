@@ -13,6 +13,8 @@ from infinite_craft_bot.query_full_recipe import FullRecipeQuery, print_full_rec
 
 logger = logging.getLogger(__name__)
 
+NUM_THREADS = 15
+
 
 def main() -> None:
     """CLI entrypoint."""
@@ -36,11 +38,11 @@ def main() -> None:
                         sampling_strategy=SamplingStrategy.LOW_DEPTH,
                         repository=PaginatedCsvRepository(write_access=True),
                     )
-                    crawler.crawl_multithreaded(num_threads=5)
+                    crawler.crawl_multithreaded(num_threads=NUM_THREADS)
                 case "exhaust":
                     logger.info("Crawling in exhaustive by depth mode...")
                     crawler = ExhaustiveCrawler(repository=PaginatedCsvRepository(write_access=True))
-                    crawler.crawl_multithreaded(num_threads=5)
+                    crawler.crawl_multithreaded(num_threads=NUM_THREADS)
                 case "target":
                     if args.target_element is None:
                         raise ValueError("Need to specify a target element in targetted mode!")
@@ -48,7 +50,7 @@ def main() -> None:
                     crawler = TargetedCrawler(
                         repository=PaginatedCsvRepository(write_access=True), target_element=args.target_element
                     )
-                    crawler.crawl_multithreaded(num_threads=5)
+                    crawler.crawl_multithreaded(num_threads=NUM_THREADS)
                 case _:
                     raise ValueError(f"Unknown crawl mode: `{args.crawl_mode}")
         case "compute_paths":
